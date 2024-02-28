@@ -1,0 +1,37 @@
+# Copyright © 2024- Frello Technology Private Limited
+
+import logging
+from typing import Optional
+from contextlib import contextmanager
+
+from tuneapi.utils.env import ENV
+
+
+def get_logger() -> logging.Logger:
+    """Returns a logger object"""
+    logger = logging.getLogger("fury")
+    lvl = ENV.TUNEAPI_LOG_LEVEL("info").upper()
+    logger.setLevel(getattr(logging, lvl))
+    log_handler = logging.StreamHandler()
+    log_handler.setFormatter(
+        logging.Formatter(
+            "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        )
+    )
+    logger.addHandler(log_handler)
+    return logger
+
+
+logger = get_logger()
+
+
+@contextmanager
+def warning_with_fix(msg: str, fix: Optional[str]):
+    msg = f"""
+Deprecation Warning:
+    err: {msg}
+""".strip()
+    if fix:
+        msg += f"   fix: {fix}"
+    logger.warning(msg)
