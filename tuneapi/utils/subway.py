@@ -10,9 +10,17 @@ from tuneapi.utils.logger import logger
 class SubwayClientError(Exception):
     """Raised if 399 < status_code < 500"""
 
+    def __init__(self, *args, code: str):
+        self.code = code
+        super().__init__(*args)
+
 
 class SubwayServerError(Exception):
     """Raised if 499 < status_code < 600"""
+
+    def __init__(self, *args, code: str):
+        self.code = code
+        super().__init__(*args)
 
 
 def get_session(token: Optional[str] = "", bearer: Optional[str] = "") -> Session:
@@ -126,9 +134,9 @@ class Subway:
             items["params"] = params
         r = fn(url, **items, **kwargs)
         if 399 < r.status_code < 500:
-            raise SubwayClientError(r.content.decode())
+            raise SubwayClientError(r.content.decode(), code=r.status_code)
         if 499 < r.status_code < 600:
-            raise SubwayServerError(r.content.decode())
+            raise SubwayServerError(r.content.decode(), code=r.status_code)
 
         try:
             data = r.json()
@@ -150,6 +158,11 @@ class Subway:
             return data, r.status_code
 
 
-def get_subway(url="http://localhost:8080") -> Subway:
+def get_subway(
+    url="http://localhost:8080",
+    headers: Optional[Dict[str, Any]] = None,
+) -> Subway:
     sess = Session()
+    if headers:
+        sess.headers.update(headers)
     return Subway(url, sess)

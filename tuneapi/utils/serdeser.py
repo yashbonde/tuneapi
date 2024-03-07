@@ -94,7 +94,7 @@ def _get_blob(key: str, engine: str = "", bucket: str = "") -> bytes:
     return res
 
 
-def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> Optional[str]:
+def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:
     """
     Convert a dict to json string and write to file if ``fp`` is provided.
 

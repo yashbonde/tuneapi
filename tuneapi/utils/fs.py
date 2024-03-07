@@ -6,8 +6,11 @@ File System
 
 import os
 import re
-import time
+import sys
 from typing import List
+from importlib.util import spec_from_file_location, module_from_spec
+
+from tuneapi.utils.randomness import get_random_string
 
 
 def get_files_in_folder(
@@ -50,3 +53,14 @@ def folder(x: str) -> str:
 def joinp(x: str, *args) -> str:
     """convienience function for os.path.join"""
     return os.path.join(x, *args)
+
+
+def load_module_from_path(fn_name, file_path):
+    spec = spec_from_file_location(fn_name, file_path)
+    foo = module_from_spec(spec)
+    mod_name = f"{fn_name}_{get_random_string(3)}"
+    sys.modules[mod_name] = foo
+    spec.loader.exec_module(foo)
+    fn = getattr(foo, fn_name)
+    del sys.modules[mod_name]
+    return fn

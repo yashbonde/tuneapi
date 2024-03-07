@@ -7,10 +7,11 @@ from contextlib import contextmanager
 from tuneapi.utils.env import ENV
 
 
-def get_logger() -> logging.Logger:
+def get_logger(name: str = "tuneapi") -> logging.Logger:
     """Returns a logger object"""
-    logger = logging.getLogger("fury")
     lvl = ENV.TUNEAPI_LOG_LEVEL("info").upper()
+    name = name or ENV.TUNEAPI_LOG_NAME(name)
+    logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, lvl))
     log_handler = logging.StreamHandler()
     log_handler.setFormatter(
