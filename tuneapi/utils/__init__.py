@@ -26,7 +26,12 @@ from tuneapi.utils.parallel import (
 from tuneapi.utils.randomness import (
     get_random_string,
 )
-from tuneapi.utils.fs import get_files_in_folder, folder, joinp, load_module_from_path
+from tuneapi.utils.fs import (
+    get_files_in_folder,
+    folder,
+    joinp,
+    load_module_from_path,
+)
 from tuneapi.utils.terminal import (
     hr,
 )
@@ -37,6 +42,9 @@ from tuneapi.utils.misc import (
     SimplerTimes,
     unsafe_exit,
     safe_exit,
+    hashstr,
+    encrypt,
+    decrypt,
 )
 from tuneapi.utils.subway import (
     SubwayClientError,

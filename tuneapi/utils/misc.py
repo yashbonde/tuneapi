@@ -1,7 +1,12 @@
 # Copyright © 2024- Frello Technology Private Limited
 
 import os
+import base64
 import hashlib
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 from datetime import datetime, timezone
 from google.protobuf.timestamp_pb2 import Timestamp as Timestamp_pb
 
@@ -35,9 +40,12 @@ class SimplerTimes:
         """Convert an int to datetime in UTC timezone"""
         return datetime.fromtimestamp(i64, SimplerTimes.tz)
 
-    def get_now_human() -> str:  # type: ignore
+    def get_now_human(date: bool = True) -> str:  # type: ignore
         """Get the current datetime in UTC timezone as a human readable string"""
-        return SimplerTimes.get_now_datetime().strftime("%A %d %B, %Y at %I:%M %p")
+        fmt_str = "%I:%M %p"
+        if date:
+            fmt_str = "%A %d %B, %Y at " + fmt_str
+        return SimplerTimes.get_now_datetime().strftime(fmt_str)
 
     def get_now_pb() -> Timestamp_pb:
         ts = Timestamp_pb()
@@ -72,3 +80,27 @@ def safe_exit(code=0):
 def hashstr(item: str, fn="md5"):
     """Hash sting of any item"""
     return getattr(hashlib, fn)(item.encode("utf-8")).hexdigest()
+
+
+def encrypt(text: str, password: str, salt: str):
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt.encode("utf-8"),
+        iterations=480000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
+    f = Fernet(key)
+    return f.encrypt(text.encode("utf-8"))
+
+
+def decrypt(token: str, password: str, salt: str):
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt.encode("utf-8"),
+        iterations=480000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
+    f = Fernet(key)
+    return f.decrypt(token).decode("utf-8")

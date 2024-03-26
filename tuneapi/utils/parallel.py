@@ -4,18 +4,10 @@ Parallel processing
 
 # Copyright © 2024- Frello Technology Private Limited
 
-import os
-import re
-import json
 import time
-import time
-import random
-import string
-import logging
 from uuid import uuid4
-from urllib.parse import quote
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Union, Tuple, Optional
+from tqdm import trange
+from typing import Any, Dict, List, Union, Tuple
 
 from concurrent.futures import ThreadPoolExecutor, as_completed, Future
 
@@ -28,6 +20,7 @@ def threaded_map(
     post_fn=None,
     _name: str = "",
     safe: bool = False,
+    pbar: bool = False,
 ) -> Union[Dict[Future, int], List[Any]]:
     """
     inputs is a list of tuples, each tuple is the input for single invocation of fn. order is preserved.
@@ -43,6 +36,7 @@ def threaded_map(
     """
     _name = _name or str(uuid4())
     results = [None for _ in range(len(inputs))]
+    _pbar = trange(len(inputs), desc="Processing", unit="input") if pbar else None
     with ThreadPoolExecutor(max_workers=max_threads, thread_name_prefix=_name) as exe:
         _fn = lambda i, x: [i, fn(*x)]
         futures = {exe.submit(_fn, i, x): i for i, x in enumerate(inputs)}
@@ -50,6 +44,8 @@ def threaded_map(
             return futures
         for future in as_completed(futures):
             try:
+                if _pbar:
+                    _pbar.update(1)
                 i, res = future.result()
                 if post_fn:
                     res = post_fn(res)
@@ -62,7 +58,7 @@ def threaded_map(
     return results
 
 
-def batched(iterable, n):
+def batched(iterable, n, ol=0, expand: bool = False, last: bool = True):
     """Convert any ``iterable`` to a generator of batches of size ``n``, last one may be smaller.
     Python 3.12 has ``itertools.batched`` which does the same thing.
 
@@ -74,23 +70,72 @@ def batched(iterable, n):
         [6, 7, 8]
         [9]
 
+        >>> for x in batched(range(10), 3, ol = 1): # overlap = 1
+        ...    print(x)
+        [0, 1, 2]
+        [2, 3, 4]
+        [4, 5, 6]
+        [6, 7, 8]
+        [8, 9]
+
+        >>> for x in batched(range(10), 3, last = False):
+        ...    print(x)
+        [0, 1, 2]
+        [3, 4, 5]
+        [6, 7, 8]
+
     Args:
         iterable (Iterable): The iterable to convert to batches
         n (int): The batch size
+        ol (int): amount of overlap between batches
+        expand (bool, optional): If true, each item in batch is tuple, eg. in numpy ``x[ ... , None]``
+        last (bool, optional): If true, return the last batch even if it is smaller than n. Defaults to True.
 
     Yields:
         Iterator: The batched iterator
     """
-    done = False
-    buffer = []
-    _iter = iter(iterable)
-    while not done:
-        try:
-            buffer.append(next(_iter))
-            if len(buffer) == n:
+    if ol == 0:
+        done = False
+        buffer = []
+        _iter = iter(iterable)
+        while not done:
+            try:
+                buffer.append(next(_iter))
+                if len(buffer) == n:
+                    if expand:
+                        for x in buffer:
+                            yield (x,)
+                    else:
+                        yield buffer
+                    buffer = []
+            except StopIteration:
+                done = True
+        if buffer and last:
+            if expand:
+                for x in buffer:
+                    yield (x,)
+            else:
                 yield buffer
-                buffer = []
-        except StopIteration:
-            done = True
-    if buffer:
-        yield buffer
+    elif ol >= n:
+        raise ValueError("Overlap cannot be greater than or equal to the batch size")
+    elif ol < 0 or n < 0:
+        raise ValueError("Overlap and batch size cannot be negative")
+    else:
+        b = []
+        for item in iterable:
+            b.append(item)
+            if len(b) == n:
+                if expand:
+                    for x in b:
+                        yield (x,)
+                else:
+                    yield b
+                b = b[n - ol :]  # Keep the overlap for the next batch
+
+        # Yield any remaining items as the last batch
+        if b and last:
+            if expand:
+                for x in b:
+                    yield (x,)
+            else:
+                yield b

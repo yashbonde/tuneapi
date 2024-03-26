@@ -7,7 +7,6 @@ from urllib.parse import quote
 from typing import Any, Dict
 from base64 import b64encode, b64decode
 from google.protobuf.struct_pb2 import Struct
-from typing import Optional
 
 from tuneapi.utils.env import ENV
 from tuneapi.utils.logger import logger

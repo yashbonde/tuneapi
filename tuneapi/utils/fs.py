@@ -16,6 +16,7 @@ from tuneapi.utils.randomness import get_random_string
 def get_files_in_folder(
     folder,
     ext="*",
+    recursive: bool = False,
     ig_pat: str = "",
     abs_path: bool = True,
     followlinks: bool = False,
@@ -28,20 +29,37 @@ def get_files_in_folder(
     ignore_pat = re.compile(ig_pat)
 
     folder_abs = os.path.abspath(folder) if abs_path else folder
-    for root, _, files in os.walk(folder_abs, followlinks=followlinks):
-        if _all:
-            for f in files:
-                _fp = joinp(root, f)
-                if not ignore_pat.search(_fp):
-                    all_paths.append(_fp)
-            continue
+    if recursive:
+        for root, _, files in os.walk(folder_abs, followlinks=followlinks):
+            if _all:
+                for f in files:
+                    _fp = joinp(root, f)
+                    if not ignore_pat.search(_fp).group():
+                        all_paths.append(_fp)
+                continue
 
-        for f in files:
+            for f in files:
+                for e in ext:
+                    print(e)
+                    if f.endswith(e):
+                        _fp = joinp(root, f)
+                        if not ignore_pat.search(_fp).group():
+                            all_paths.append(_fp)
+
+    else:
+        for f in os.listdir(folder_abs):
+            if _all:
+                _fp = joinp(folder_abs, f)
+                if not ignore_pat.search(_fp).group():
+                    all_paths.append(_fp)
+                continue
+
             for e in ext:
                 if f.endswith(e):
-                    _fp = joinp(root, f)
-                    if not ignore_pat.search(_fp):
+                    _fp = joinp(folder_abs, f)
+                    if not ignore_pat.search(_fp).group():
                         all_paths.append(_fp)
+
     return all_paths
 
 
