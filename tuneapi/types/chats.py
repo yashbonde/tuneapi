@@ -38,6 +38,7 @@ class Message:
         "function-resp": FUNCTION_RESP,
         # tools
         "tools": TOOLS,
+        "tool": TOOLS,
     }
 
     # start initialization here
@@ -103,6 +104,7 @@ class Message:
 human = partial(Message, role=Message.HUMAN)
 system = partial(Message, role=Message.SYSTEM)
 assistant = partial(Message, role=Message.GPT)
+tools = partial(Message, role=Message.TOOLS)
 
 
 class Thread:
@@ -119,11 +121,13 @@ class Thread:
         *chats: Union[List[Message], Message],
         jl: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
+        i: str = "",
         **kwargs,
     ):
         self.chats = list(chats)
         self.jl = jl
         self.model = model
+        self.id = i
 
         #
         kwargs = {k: v for k, v in sorted(kwargs.items())}
@@ -140,6 +144,8 @@ class Thread:
 
     def __repr__(self) -> str:
         x = "<Thread "
+        if self.id:
+            x += f"'{self.id}' "
         for k, v in self.meta.items():
             x += f"{k}={v} "
         for c in self.chats:

@@ -7,4 +7,5 @@ from tuneapi.types.chats import (
     system,
     human,
     assistant,
+    tools,
 )
