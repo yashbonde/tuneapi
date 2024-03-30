@@ -4,7 +4,7 @@ import json
 import requests
 from typing import Optional, Dict, Any, Tuple, List
 
-from tuneapi.utils import ENV, SimplerTimes as stime, from_json
+from tuneapi.utils import ENV, SimplerTimes as stime, from_json, to_json
 from tuneapi.types import Thread, human, Message
 
 
@@ -317,14 +317,14 @@ class Openai:
             raise e
         x = r.json()["choices"][0]["message"]
         if "tool_calls" not in x:
-            return x["content"], False
+            return x["content"]
         else:
             y = x["tool_calls"][0]["function"]
             # print(x)
             return {
                 "name": y["name"],
                 "arguments": from_json(y["arguments"]),
-            }, True
+            }
 
 
 class Anthropic:
@@ -484,16 +484,35 @@ class Anthropic:
             raise e
 
         for line in r.iter_lines():
-            if raw:
-                yield line
+            line = line.decode().strip()
+            if not "data:" in line or not line:
                 continue
 
-            line = line.decode().strip()
-            if line and "data:" in line:
+            # create openai style raw response
+            if raw:
                 try:
                     resp = json.loads(line.replace("data:", "").strip())
                     if "delta" in resp:
-                        yield resp["delta"]["text"]
+                        yield (
+                            "data: "
+                            + to_json(
+                                {
+                                    "choices": [
+                                        {"delta": {"content": resp["delta"]["text"]}}
+                                    ]
+                                },
+                                tight=True,
+                            )
+                        ).encode()
                 except:
-                    break
+                    yield line
+                continue
+
+            # return token
+            try:
+                resp = json.loads(line.replace("data:", "").strip())
+                if "delta" in resp:
+                    yield resp["delta"]["text"]
+            except:
+                break
         return
