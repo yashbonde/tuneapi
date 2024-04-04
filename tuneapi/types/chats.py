@@ -68,6 +68,11 @@ class Message:
     def __repr__(self) -> str:
         return str(self.value)
 
+    def __getitem__(self, x):
+        if x == "content":
+            return self.value
+        return getattr(self, x)
+
     def to_dict(self, ft: bool = False):
         """
         if `ft` then export to following format: `{"from": "system/human/gpt", "value": "..."}`
@@ -177,13 +182,14 @@ class Thread:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Thread":
-        chats = data.get("chats", None) or data.get("conversations", None)
+        chats = data.get("chats", []) or data.get("conversations", [])
         if not chats:
             raise ValueError("No chats found")
         return cls(
-            chats=[Message.from_dict(x) for x in chats],
-            jl=data.get("jl"),
-            model=data.get("model"),
+            *[Message.from_dict(x) for x in chats],
+            i=data.get("id", ""),
+            jl=data.get("jl", ""),
+            model=data.get("model", ""),
             **data.get("meta", {}),
         )
 

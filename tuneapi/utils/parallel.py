@@ -36,6 +36,7 @@ def threaded_map(
     """
     _name = _name or str(uuid4())
     results = [None for _ in range(len(inputs))]
+    errors = []
     _pbar = trange(len(inputs), desc="Processing", unit="input") if pbar else None
     with ThreadPoolExecutor(max_workers=max_threads, thread_name_prefix=_name) as exe:
         _fn = lambda i, x: [i, fn(*x)]
@@ -52,9 +53,11 @@ def threaded_map(
                 results[i] = res
             except Exception as e:
                 if safe:
-                    results[i] = e
+                    errors.append(e)
                 else:
                     raise e
+    if safe:
+        return results, errors
     return results
 
 
