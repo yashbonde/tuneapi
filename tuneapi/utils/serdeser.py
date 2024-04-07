@@ -156,12 +156,12 @@ def from_pickle(path):
         return cloudpickle.load(f)
 
 
-def py_to_bs64(x: Any):
-    return b64encode(cloudpickle.dumps(x)).decode("utf-8")
+def to_b64(x: bytes):
+    return b64encode(x).decode("utf-8")
 
 
-def py_from_bs64(x: bytes):
-    return cloudpickle.loads(b64decode(x.encode("utf-8")))
+def from_b64(x: str):
+    return b64decode(x.encode("utf-8"))
 
 
 def dict_to_structpb(data: Dict) -> Struct:

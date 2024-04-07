@@ -69,10 +69,13 @@ class Anthropic:
             role = m["role"]
             if m["role"] == Message.HUMAN:
                 role = "user"
+            content = m["content"]
+            if type(content) == str:
+                content = [{"type": "text", "text": content.strip()}]
             claude_messages.append(
                 {
                     "role": role,
-                    "content": [{"type": "text", "text": m["content"].strip()}],
+                    "content": content,
                 }
             )
 

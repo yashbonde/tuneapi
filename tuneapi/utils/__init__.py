@@ -13,6 +13,8 @@ from tuneapi.utils.serdeser import (
     from_json,
     dict_to_structpb,
     structpb_to_dict,
+    to_b64,
+    from_b64,
 )
 from tuneapi.utils.networking import (
     UnAuthException,
