@@ -3,94 +3,9 @@
 import os
 import json
 import cloudpickle
-from urllib.parse import quote
 from typing import Any, Dict
 from base64 import b64encode, b64decode
 from google.protobuf.struct_pb2 import Struct
-
-from tuneapi.utils.env import ENV
-from tuneapi.utils.logger import logger
-
-
-def _store_blob(key: str, value: bytes, engine: str = "", bucket: str = "") -> str:
-    """A function that stores the information in a file. This can automatically route to different storage engines.
-
-    Args:
-        key (str): The key to store the file under
-        value (bytes): The value to store
-        engine (str, optional): The engine to use, either pass value or set `BLOB_ENGINE` env var. Defaults to "".
-        bucket (str, optional): The bucket to use, either pass value or set `BLOB_BUCKET` env var. Defaults to "".
-
-    Returns:
-        str: The url of the stored file or filepath
-    """
-
-    engine = engine or ENV.BLOB_ENGINE()
-
-    if engine == "no":
-        # useful for debugging issues
-        res = ""
-    elif engine == "local":
-        # store all the files locally, good when self hosting for demo
-        fp = os.path.join(ENV.BLOB_STORAGE(), key)
-        with open(fp, "wb") as f:
-            f.write(value)
-        res = fp
-    elif engine == "s3":
-        try:
-            import boto3  # type: ignore
-        except ImportError:
-            raise ImportError("Please install boto3 to use 's3' storage engine")
-
-        s3 = boto3.client("s3")
-        bucket_name = bucket or ENV.BLOB_BUCKET()
-        key = ENV.BLOB_PREFIX() + key
-        logger.info(f"Storing {key} in {bucket_name}")
-        s3.put_object(Bucket=bucket_name, Key=key, Body=value)
-        aws_cfurl = ENV.BLOB_AWS_CLOUD_FRONT()
-        if aws_cfurl:
-            res = aws_cfurl + quote(key)
-        else:
-            res = f"https://{bucket_name}.s3.amazonaws.com/{key}"
-    else:
-        raise Exception(f"Unknown blob engine: {ENV.BLOB_ENGINE()}")
-    return res
-
-
-def _get_blob(key: str, engine: str = "", bucket: str = "") -> bytes:
-    """A function that gets the information from a file. This can automatically route to different storage engines.
-
-    Args:
-        key (str): The key to read the blob
-        engine (str, optional): The engine to use, either pass value or set `BLOB_ENGINE` env var. Defaults to "".
-        bucket (str, optional): The bucket to use, either pass value or set `BLOB_BUCKET` env var. Defaults to "".
-
-    Returns:
-        bytes: The value stored in the blob
-    """
-
-    engine = engine or ENV.BLOB_ENGINE()
-
-    if engine == "no":
-        res = b""
-    elif engine == "local":
-        fp = os.path.join(ENV.BLOB_STORAGE(), key)
-        with open(fp, "rb") as f:
-            res = f.read()
-    elif engine == "s3":
-        try:
-            import boto3  # type: ignore
-        except ImportError:
-            raise ImportError("Please install boto3 to use 's3' storage engine")
-
-        s3 = boto3.client("s3")
-        bucket_name = bucket or ENV.BLOB_BUCKET()
-        key = ENV.BLOB_PREFIX() + key
-        logger.info(f"Getting {key} from {bucket_name}")
-        res = s3.get_object(Bucket=bucket_name, Key=key)["Body"].read()
-    else:
-        raise Exception(f"Unknown blob engine: {ENV.BLOB_ENGINE()}")
-    return res
 
 
 def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:

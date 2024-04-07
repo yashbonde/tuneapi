@@ -55,11 +55,3 @@ from tuneapi.utils.subway import (
     get_session,
     get_subway,
 )
-
-# sometimes services would need to not have tune dir, in which case anyone using this package can just
-# turn it off.
-if not ENV.TUNE_DISABLE_HOME_DIR("0") == "1":
-    # create the default folder for all the things that this library needs
-    os.makedirs(ENV.DEFAULT_FOLDER(os.path.expanduser("~/.tuneapi")), exist_ok=True)
-    if ENV.BLOB_ENGINE() == "local":
-        os.makedirs(ENV.BLOB_STORAGE(), exist_ok=True)
