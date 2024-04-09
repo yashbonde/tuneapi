@@ -28,6 +28,10 @@ class SimplerTimes:
         """Get the current datetime in UTC timezone as a float"""
         return SimplerTimes.get_now_datetime().timestamp()
 
+    def get_now_fp64() -> float:  # type: ignore
+        """Get the current datetime in UTC timezone as a float"""
+        return SimplerTimes.get_now_datetime().timestamp()
+
     def get_now_i64() -> int:  # type: ignore
         """Get the current datetime in UTC timezone as a int"""
         return int(SimplerTimes.get_now_datetime().timestamp())
@@ -35,10 +39,6 @@ class SimplerTimes:
     def get_now_str() -> str:  # type: ignore
         """Get the current datetime in UTC timezone as a string"""
         return SimplerTimes.get_now_datetime().strftime("%Y-%m-%d %H:%M:%S.%f")
-
-    def i64_to_datetime(i64: int) -> datetime:  # type: ignore
-        """Convert an int to datetime in UTC timezone"""
-        return datetime.fromtimestamp(i64, SimplerTimes.tz)
 
     def get_now_human(date: bool = True) -> str:  # type: ignore
         """Get the current datetime in UTC timezone as a human readable string"""
@@ -54,6 +54,10 @@ class SimplerTimes:
 
     def get_now_ns() -> int:
         return SimplerTimes.get_now_pb().ToNanoseconds()
+
+    def i64_to_datetime(i64: int) -> datetime:  # type: ignore
+        """Convert an int to datetime in UTC timezone"""
+        return datetime.fromtimestamp(i64, SimplerTimes.tz)
 
 
 def unsafe_exit(code=0):

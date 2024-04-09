@@ -192,7 +192,7 @@ class Anthropic:
                             )
                         ).encode()
                 except:
-                    yield line
+                    yield line.encode()
                 continue
 
             # return token
