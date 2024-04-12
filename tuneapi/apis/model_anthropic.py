@@ -11,10 +11,10 @@ from tuneapi.types import Thread, human, Message
 class Anthropic:
     def __init__(self, model: Optional[str] = "claude-3-haiku-20240307"):
         self.anthropic_model = model
-        self.anthropic_token = ENV.ANTHROPIC_TOKEN("")
+        self.anthropic_api_token = ENV.ANTHROPIC_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
-        self.anthropic_token = token
+        self.anthropic_api_token = token
 
     def tool_to_claude_xml(self, tool):
         tool_signature = ""
@@ -47,11 +47,11 @@ class Anthropic:
     def _process_input(
         self, chats, tools: Optional[List] = None, token: Optional[str] = None
     ):
-        if not token and not self.anthropic_token:  # type: ignore
+        if not token and not self.anthropic_api_token:  # type: ignore
             raise Exception(
-                "Anthropic API key not found. Please set ANTHROPIC_TOKEN environment variable or pass through function"
+                "Please set ANTHROPIC_TOKEN environment variable or pass through function"
             )
-        token = token or self.anthropic_token
+        token = token or self.anthropic_api_token
         if isinstance(chats, Thread):
             messages = chats.to_dict()["chats"]
         elif isinstance(chats, str):
@@ -63,9 +63,9 @@ class Anthropic:
         system = ""
         claude_messages = []
         if messages[0]["role"] == Message.SYSTEM:
-            system = messages[0]["content"]
-        start_idx = 1 if system else 0
-        for m in messages[start_idx:]:
+            system_message = messages.pop(0)
+            system = system_message["content"]
+        for m in messages:
             role = m["role"]
             if m["role"] == Message.HUMAN:
                 role = "user"
@@ -144,7 +144,7 @@ class Anthropic:
         raw: bool = False,
         **kwargs,
     ) -> Any:
-        headers, system, messages = self._process_input(
+        headers, system, claude_messages = self._process_input(
             chats=chats,
             tools=tools,
             token=token,
@@ -152,7 +152,7 @@ class Anthropic:
         data = {
             "model": model or self.anthropic_model,
             "max_tokens": max_tokens,
-            "messages": messages,
+            "messages": claude_messages,
             "temperature": temperature,
             "system": system,
             "stream": True,

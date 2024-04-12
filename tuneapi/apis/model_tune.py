@@ -12,7 +12,7 @@ class TuneModel:
     """Defines the model used in tune.app. See [Tune Studio](https://studio.tune.app/) for more information."""
 
     def __init__(self, id: Optional[str] = "rohan/mixtral-8x7b-inst-v0-1-32k"):
-        self._tune_model_id = id
+        self.tune_model_id = id
         self.tune_api_token = ENV.TUNEAPI_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
@@ -67,7 +67,7 @@ class TuneModel:
         data = {
             "temperature": temperature,
             "messages": messages,
-            "model": model or self._tune_model_id,
+            "model": model or self.tune_model_id,
             "stream": False,
             "max_tokens": max_tokens,
         }
