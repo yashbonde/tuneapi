@@ -42,7 +42,7 @@ class Message:
     }
 
     # start initialization here
-    def __init__(self, value: str | float | List[Dict[str, Any]], role: str):
+    def __init__(self, value: str | float | List[Dict[str, Any]], role: str, **kwargs):
         if role not in self.KNOWN_ROLES:
             raise ValueError(f"Unknown role: {role}. Update dictionary `KNOWN_ROLES`")
         if value is None:
@@ -51,6 +51,7 @@ class Message:
         self.role = role
         self.value = value
         self._unq_value = get_random_string(6)
+        self.metadata = kwargs
 
     def __str__(self) -> str:
         try:
@@ -73,12 +74,21 @@ class Message:
             return self.value
         return getattr(self, x)
 
-    def to_dict(self, ft: bool = False):
+    def to_dict(
+        self,
+        format: Optional[str] = None,
+        meta: bool = False,
+    ):  #  ft: bool = False
         """
-        if `ft` then export to following format: `{"from": "system/human/gpt", "value": "..."}`
+        if format == `ft` then export to following format: `{"from": "system/human/gpt", "value": "..."}`
+        elif format == `api` then `{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}`
         else export to following format: `{"role": "system/user/assistant", "content": "..."}`
         """
         role = self.role
+
+        ft = format == "ft"
+        api = format == "api"
+
         if not ft:
             if self.role == self.HUMAN:
                 role = "user"
@@ -91,10 +101,16 @@ class Message:
         else:
             chat_message = {"role": role}
 
-        if not ft:
-            chat_message["content"] = self.value
-        else:
+        if ft:
             chat_message["value"] = self.value
+        elif api:
+            chat_message["content"] = [{"type": "text", "text": {"value": self.value}}]
+        else:
+            chat_message["content"] = self.value
+
+        if meta:
+            chat_message["metadata"] = self.metadata
+
         return chat_message
 
     @classmethod
@@ -102,6 +118,7 @@ class Message:
         return cls(
             value=data.get("value") or data.get("content"),
             role=data.get("from") or data.get("role"),
+            **data.get("metadata", {}),
         )  # type: ignore
 
 
@@ -126,13 +143,15 @@ class Thread:
         *chats: Union[List[Message], Message],
         jl: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
-        i: str = "",
+        id: str = "",
+        title: str = "",
         **kwargs,
     ):
         self.chats = list(chats)
         self.jl = jl
         self.model = model
-        self.id = i
+        self.id = id
+        self.title = title
 
         #
         kwargs = {k: v for k, v in sorted(kwargs.items())}
@@ -175,6 +194,8 @@ class Thread:
                 "jl": self.jl,
                 "model": self.model,
                 "meta": self.meta,
+                "title": self.title,
+                "id": self.id,
             }
         return {
             "chats": [x.to_dict() for x in self.chats],
@@ -187,9 +208,10 @@ class Thread:
             raise ValueError("No chats found")
         return cls(
             *[Message.from_dict(x) for x in chats],
-            i=data.get("id", ""),
+            id=data.get("id", ""),
             jl=data.get("jl", ""),
             model=data.get("model", ""),
+            title=data.get("title", ""),
             **data.get("meta", {}),
         )
 
@@ -199,10 +221,10 @@ class Thread:
         chats = self.chats if not drop_last else self.chats[:-1]
         ft_dict = {
             "id": id or get_random_string(6),
-            "conversations": [x.to_dict(ft=True) for x in chats],
+            "conversations": [x.to_dict(format="ft") for x in chats],
         }
         if drop_last:
-            ft_dict["last"] = self.chats[-1].to_dict(ft=True)
+            ft_dict["last"] = self.chats[-1].to_dict(format="ft")
         return ft_dict, self.meta
 
     # modifications
@@ -212,6 +234,7 @@ class Thread:
             chats=[x for x in self.chats],
             jl=self.jl,
             model=self.model,
+            title="Copy: " + self.title,
             **self.meta,
         )
 

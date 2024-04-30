@@ -63,6 +63,10 @@ def get_files_in_folder(
     return all_paths
 
 
+list_dir = get_files_in_folder
+"""Alias for `get_files_in_folder`"""
+
+
 def folder(x: str) -> str:
     """get the folder of this file path"""
     return os.path.split(os.path.abspath(x))[0]

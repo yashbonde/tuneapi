@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, Tuple
 
 from tuneapi.utils.logger import logger
+from tuneapi.utils.misc import SimplerTimes
 
 
 class SubwayClientError(Exception):
@@ -23,12 +24,18 @@ class SubwayServerError(Exception):
         super().__init__(*args)
 
 
-def get_session(token: Optional[str] = "", bearer: Optional[str] = "") -> Session:
+def get_session(
+    token: Optional[str] = "",
+    bearer: Optional[str] = "",
+    **headers,
+) -> Session:
     sess = Session()
     if token:
         sess.headers.update({"token": token})
     if bearer:
         sess.headers.update({"Authorization": f"Bearer {bearer}"})
+    if headers:
+        sess.headers.update(headers)
     return sess
 
 
@@ -49,6 +56,7 @@ class Subway:
     def __init__(self, _url: str, _session: Session):
         self._url = _url.rstrip("/")
         self._session = _session
+        self._last_update = SimplerTimes.get_now_i64()
 
     def __repr__(self):
         return self._url
@@ -77,8 +85,16 @@ class Subway:
         """Renew the session"""
         _session = Session()
         if "token" in self._session.headers:
-            _session.headers.update({"token": self._session.headers["token"]})
+            _session.headers.update(**self._session.headers)
         self._session = _session
+
+    @staticmethod
+    def _get_session(
+        token: Optional[str] = "",
+        bearer: Optional[str] = "",
+        **headers,
+    ) -> Session:
+        return get_session(token=token, bearer=bearer, **headers)
 
     def __call__(
         self,
@@ -132,6 +148,9 @@ class Subway:
             items["data"] = data
         if params:
             items["params"] = params
+
+        if SimplerTimes.get_now_i64() - self._last_update > 120:
+            self._renew_session()
         r = fn(url, **items, **kwargs)
         if 399 < r.status_code < 500:
             raise SubwayClientError(r.content.decode(), code=r.status_code)

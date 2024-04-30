@@ -9,8 +9,13 @@ from tuneapi.types import Thread, human, Message
 
 
 class Groq:
-    def __init__(self, id: Optional[str] = "mixtral-8x7b-32768"):
+    def __init__(
+        self,
+        id: Optional[str] = "mixtral-8x7b-32768",
+        base_url: str = "https://api.groq.com/openai/v1/chat/completions",
+    ):
         self.groq_model_id = id
+        self.base_url = base_url
         self.groq_api_token = ENV.GROQ_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
@@ -77,7 +82,7 @@ class Groq:
         # for m in messages:
         #     print(m)
         response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
+            self.base_url,
             headers=headers,
             json=data,
             stream=True,

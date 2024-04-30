@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "tuneapi"
-version = "0.2.8"
+version = "0.3.1"
 description = "Tune AI APIs."
 authors = ["Frello Technology Private Limited <engineering@nimblebox.ai>"]
-license = "Apache 2.0"
+license = "MIT"
 readme = "README.md"
 repository = "https://github.com/NimbleBoxAI/tuneapi"
 
@@ -15,6 +15,7 @@ cloudpickle = "3.0.0"
 protobuf = "^4.25.3"
 cryptography = ">=42.0.5"
 tqdm = "^4.66.1"
+snowflake_id = "1.0.2"
 boto3 = { version = "1.29.6", optional = true }
 
 [tool.poetry.extras]

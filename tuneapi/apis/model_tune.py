@@ -11,12 +11,21 @@ from tuneapi.types import Thread, human, Message
 class TuneModel:
     """Defines the model used in tune.app. See [Tune Studio](https://studio.tune.app/) for more information."""
 
-    def __init__(self, id: Optional[str] = "rohan/mixtral-8x7b-inst-v0-1-32k"):
+    def __init__(
+        self,
+        id: Optional[str] = "rohan/mixtral-8x7b-inst-v0-1-32k",
+        base_url: str = "https://proxy.tune.app/chat/completions",
+    ):
         self.tune_model_id = id
+        self.base_url = base_url
         self.tune_api_token = ENV.TUNEAPI_TOKEN("")
+        self.tune_org_id = ENV.TUNEORG_ID("")
 
     def set_api_token(self, token: str) -> None:
         self.tune_api_token = token
+
+    def set_org_id(self, org_id: str) -> None:
+        self.tune_org_id = org_id
 
     def _process_input(self, chats, token: Optional[str] = None):
         if not token and not self.tune_api_token:  # type: ignore
@@ -35,6 +44,8 @@ class TuneModel:
             "Authorization": token,
             "Content-Type": "application/json",
         }
+        if self.tune_org_id:
+            headers["X-Org-Id"] = self.tune_org_id
         return headers, messages
 
     def chat(
@@ -72,7 +83,7 @@ class TuneModel:
             "max_tokens": max_tokens,
         }
         response = requests.post(
-            "https://proxy.tune.app/chat/completions",
+            self.base_url,
             headers=headers,
             json=data,
             timeout=timeout,

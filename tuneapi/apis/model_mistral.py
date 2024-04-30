@@ -9,8 +9,13 @@ from tuneapi.types import Thread, human, Message
 
 
 class Mistral:
-    def __init__(self, id: Optional[str] = "mistral-small-latest"):
+    def __init__(
+        self,
+        id: Optional[str] = "mistral-small-latest",
+        base_url: str = "https://api.mistral.ai/v1/chat/completions",
+    ):
         self.groq_model_id = id
+        self.base_url = base_url
         self.mistral_api_token = ENV.MISTRAL_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
@@ -77,7 +82,7 @@ class Mistral:
         # for m in messages:
         #     print(m)
         response = requests.post(
-            "https://api.mistral.ai/v1/chat/completions",
+            self.base_url,
             headers=headers,
             json=data,
             stream=True,

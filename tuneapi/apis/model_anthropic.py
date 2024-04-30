@@ -9,8 +9,13 @@ from tuneapi.types import Thread, human, Message
 
 
 class Anthropic:
-    def __init__(self, model: Optional[str] = "claude-3-haiku-20240307"):
+    def __init__(
+        self,
+        model: Optional[str] = "claude-3-haiku-20240307",
+        base_url: str = "https://api.anthropic.com/v1/messages",
+    ):
         self.anthropic_model = model
+        self.base_url = base_url
         self.anthropic_api_token = ENV.ANTHROPIC_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
@@ -159,7 +164,7 @@ class Anthropic:
             **kwargs,
         }
         r = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            self.base_url,
             headers=headers,
             json=data,
             timeout=timeout,

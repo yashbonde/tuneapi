@@ -7,14 +7,14 @@ Parallel processing
 import time
 from uuid import uuid4
 from tqdm import trange
-from typing import Any, Dict, List, Union, Tuple
+from typing import Any, Dict, List, Union, Tuple, Generator
 
 from concurrent.futures import ThreadPoolExecutor, as_completed, Future
 
 
 def threaded_map(
     fn,
-    inputs: List[Tuple],
+    inputs: List[Tuple] | Generator,
     wait: bool = True,
     max_threads=20,
     post_fn=None,
@@ -32,9 +32,12 @@ def threaded_map(
         max_threads (int, optional): The maximum number of threads to use. Defaults to 20.
         post_fn (function, optional): A function to call with the result. Defaults to None.
         _name (str, optional): The name of the thread pool. Defaults to "".
-        safe (bool, optional): If true, all caughts exceptions are in the results. Defaults to False.
+        safe (bool, optional): If true, all exceptions are caught and returned with results. Defaults to False.
+        pbar (bool, optional): If true, show a progress bar. Defaults to False.
     """
     _name = _name or str(uuid4())
+    if isinstance(inputs, Generator):
+        inputs = list(inputs)
     results = [None for _ in range(len(inputs))]
     errors = []
     _pbar = trange(len(inputs), desc="Processing", unit="input") if pbar else None
@@ -48,7 +51,7 @@ def threaded_map(
                 if _pbar:
                     _pbar.update(1)
                 i, res = future.result()
-                if post_fn:
+                if post_fn is not None:
                     res = post_fn(res)
                 results[i] = res
             except Exception as e:
