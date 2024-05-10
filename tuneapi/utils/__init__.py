@@ -35,6 +35,7 @@ from tuneapi.utils.fs import (
     folder,
     joinp,
     load_module_from_path,
+    fetch,
 )
 from tuneapi.utils.terminal import (
     hr,

@@ -7,10 +7,12 @@ File System
 import os
 import re
 import sys
+import requests
 from typing import List
 from importlib.util import spec_from_file_location, module_from_spec
 
 from tuneapi.utils.randomness import get_random_string
+from tuneapi.utils.misc import hashstr
 
 
 def get_files_in_folder(
@@ -86,3 +88,19 @@ def load_module_from_path(fn_name, file_path):
     fn = getattr(foo, fn_name)
     del sys.modules[mod_name]
     return fn
+
+
+def fetch(url, cache="/tmp", method="post", force: bool = False, **kwargs):
+    h = hashstr(url)
+    fp = os.path.join(cache, h)
+    if not force and os.path.exists(fp):
+        with open(fp, "r") as f:
+            return f.read()
+
+    # get the latest from the place
+    fn = getattr(requests, method)
+    r = fn(url, **kwargs)
+    r.raise_for_status()
+    with open(fp, "w") as f:
+        f.write(r.text)
+    return r.text

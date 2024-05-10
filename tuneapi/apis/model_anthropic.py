@@ -77,6 +77,8 @@ class Anthropic:
             content = m["content"]
             if type(content) == str:
                 content = [{"type": "text", "text": content.strip()}]
+            elif m["role"] == Message.GPT:
+                role = "assistant"
             claude_messages.append(
                 {
                     "role": role,
