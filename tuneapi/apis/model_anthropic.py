@@ -71,14 +71,17 @@ class Anthropic:
             system_message = messages.pop(0)
             system = system_message["content"]
         for m in messages:
+            # correct the role
             role = m["role"]
             if m["role"] == Message.HUMAN:
                 role = "user"
+            elif m["role"] == Message.GPT:
+                role = "assistant"
+
+            # correct content
             content = m["content"]
             if type(content) == str:
                 content = [{"type": "text", "text": content.strip()}]
-            elif m["role"] == Message.GPT:
-                role = "assistant"
             claude_messages.append(
                 {
                     "role": role,
@@ -147,7 +150,7 @@ class Anthropic:
         max_tokens: int = 1024,
         temperature: float = 1,
         token: Optional[str] = None,
-        timeout=(5, 60),
+        timeout=(5, 30),
         raw: bool = False,
         **kwargs,
     ) -> Any:
@@ -197,9 +200,9 @@ class Anthropic:
                                 },
                                 tight=True,
                             )
-                        ).encode()
+                        ).encode() + b"\r\n"
                 except:
-                    yield line.encode()
+                    yield line.encode() + b"\r\n"
                 continue
 
             # return token
