@@ -1,3 +1,5 @@
 # Tune API
 
-Package for using 
+Python package for building GenAI apps tightly integrated to Tune Studio.
+
+> The largest utils for any GenAI package ever! See [tuneapi.utils](./tuneapi/utils/__init__.py)

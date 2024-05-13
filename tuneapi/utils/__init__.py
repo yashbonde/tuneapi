@@ -1,4 +1,5 @@
 # Copyright © 2024- Frello Technology Private Limited
+# REMEMBER: nothing from outside tune should be imported in utils
 
 import os
 
@@ -39,6 +40,7 @@ from tuneapi.utils.fs import (
 )
 from tuneapi.utils.terminal import (
     hr,
+    color,
 )
 from tuneapi.utils.mime import (
     get_mime_type,

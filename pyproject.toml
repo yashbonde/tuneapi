@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tuneapi"
-version = "0.3.3"
+version = "0.4.0"
 description = "Tune AI APIs."
 authors = ["Frello Technology Private Limited <engineering@nimblebox.ai>"]
 license = "MIT"
@@ -20,6 +20,9 @@ boto3 = { version = "1.29.6", optional = true }
 
 [tool.poetry.extras]
 boto3 = ["boto3"]
+
+[tool.poetry.scripts]
+tuneapi = "tuneapi.__main__:main"
 
 [tool.poetry.group.dev.dependencies]
 sphinx = "7.2.5"
