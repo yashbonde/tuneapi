@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tuneapi"
-version = "0.4.0"
+version = "0.4.1"
 description = "Tune AI APIs."
 authors = ["Frello Technology Private Limited <engineering@nimblebox.ai>"]
 license = "MIT"

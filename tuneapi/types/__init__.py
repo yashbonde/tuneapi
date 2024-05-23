@@ -4,8 +4,10 @@ from tuneapi.types.chats import (
     Message,
     Thread,
     ThreadsList,
+    Tool,
     system,
     human,
     assistant,
-    tools,
+    function_call,
+    function_resp,
 )

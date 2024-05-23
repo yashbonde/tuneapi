@@ -4,7 +4,7 @@ import json
 import requests
 from typing import Optional, Dict, Any, Tuple, List
 
-from tuneapi.utils import ENV, SimplerTimes as stime, from_json, to_json
+import tuneapi.utils as tu
 from tuneapi.types import Thread, human, Message
 
 
@@ -16,7 +16,7 @@ class Anthropic:
     ):
         self.anthropic_model = model
         self.base_url = base_url
-        self.anthropic_api_token = ENV.ANTHROPIC_TOKEN("")
+        self.anthropic_api_token = tu.ENV.ANTHROPIC_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
         self.anthropic_api_token = token
@@ -49,125 +49,157 @@ class Anthropic:
         )
         return constructed_prompt
 
-    def _process_input(
-        self, chats, tools: Optional[List] = None, token: Optional[str] = None
-    ):
+    def _process_input(self, chats, token: Optional[str] = None):
         if not token and not self.anthropic_api_token:  # type: ignore
             raise Exception(
                 "Please set ANTHROPIC_TOKEN environment variable or pass through function"
             )
         token = token or self.anthropic_api_token
         if isinstance(chats, Thread):
-            messages = chats.to_dict()["chats"]
+            thread = chats
         elif isinstance(chats, str):
-            messages = Thread(human(chats)).to_dict()["chats"]
+            thread = Thread(human(chats))
         else:
-            messages = chats
+            raise Exception("Invalid input")
 
         # create the anthropic style data
         system = ""
+        if thread.chats[0].role == Message.SYSTEM:
+            system = thread.chats[0].value
+
         claude_messages = []
-        if messages[0]["role"] == Message.SYSTEM:
-            system_message = messages.pop(0)
-            system = system_message["content"]
-        for m in messages:
-            # correct the role
-            role = m["role"]
-            if m["role"] == Message.HUMAN:
-                role = "user"
-            elif m["role"] == Message.GPT:
-                role = "assistant"
-
-            # correct content
-            content = m["content"]
-            if type(content) == str:
-                content = [{"type": "text", "text": content.strip()}]
-            claude_messages.append(
-                {
-                    "role": role,
-                    "content": content,
-                }
-            )
-
-        if tools:
-            tool_use_system_prompt = (
-                "In this environment you have access to a set of tools you can use to answer the user's question.\n"
-                "\n"
-                "You may call them like this:\n"
-                "<function_calls>\n"
-                "<invoke>\n"
-                "<tool_name>$TOOL_NAME</tool_name>\n"
-                "<parameters>\n"
-                "<$PARAMETER_NAME>$PARAMETER_VALUE</$PARAMETER_NAME>\n"
-                "...\n"
-                "</parameters>\n"
-                "</invoke>\n"
-                "</function_calls>\n"
-                "\n"
-                "Here are the tools available:\n"
-                "<tools>\n"
-                + "\n".join([self.tool_to_claude_xml(tool) for tool in tools])
-                + "\n</tools>"
-            )
-            system += "\n\n" + tool_use_system_prompt
-        system = system.strip()
+        prev_tool_id = tu.get_random_string(5)
+        for m in thread.chats[int(system != "") :]:
+            if m.role == Message.HUMAN:
+                claude_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": m.value.strip(),
+                            }
+                        ],
+                    }
+                )
+            elif m.role == Message.GPT:
+                claude_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": m.value.strip(),
+                            }
+                        ],
+                    }
+                )
+            elif m.role == Message.FUNCTION_CALL:
+                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                claude_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": prev_tool_id,
+                                "name": _m["name"],
+                                "input": _m["arguments"],
+                            }
+                        ],
+                    }
+                )
+            elif m.role == Message.FUNCTION_RESP:
+                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                claude_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": prev_tool_id,
+                                "content": tu.to_json(_m, tight=True),
+                            }
+                        ],
+                    }
+                )
+            else:
+                raise Exception(f"Unknown role: {m.role}")
 
         headers = {
             "x-api-key": token,
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01",
+            "anthropic-beta": "tools-2024-05-16",
         }
-        return headers, system, claude_messages
+        return headers, system.strip(), claude_messages
 
     def chat(
         self,
         chats: Thread | str,
-        tools: Optional[List] = None,
         model: Optional[str] = None,
         max_tokens: int = 1024,
-        temperature: float = 1,
+        temperature: Optional[float] = None,
         token: Optional[str] = None,
+        return_message: bool = False,
         **kwargs,
     ):
         output = ""
+        fn_call = None
         for i in self.stream_chat(
             chats=chats,
-            tools=tools,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
             **kwargs,
         ):
-            output += i
-        return output
+            if isinstance(i, dict):
+                fn_call = i
+            else:
+                output += i
+        if return_message:
+            return output, fn_call
+        return fn_call
 
     def stream_chat(
         self,
         chats: Thread | str,
-        tools: Optional[List] = None,
         model: Optional[str] = None,
         max_tokens: int = 1024,
-        temperature: float = 1,
+        temperature: Optional[float] = None,
         token: Optional[str] = None,
         timeout=(5, 30),
         raw: bool = False,
+        debug: bool = False,
         **kwargs,
     ) -> Any:
-        headers, system, claude_messages = self._process_input(
-            chats=chats,
-            tools=tools,
-            token=token,
-        )
+
+        tools = []
+        if isinstance(chats, Thread):
+            tools = [x.to_dict() for x in chats.tools]
+            for t in tools:
+                t["input_schema"] = t.pop("parameters")
+        headers, system, claude_messages = self._process_input(chats=chats, token=token)
+
         data = {
             "model": model or self.anthropic_model,
             "max_tokens": max_tokens,
             "messages": claude_messages,
-            "temperature": temperature,
             "system": system,
+            "tools": tools,
             "stream": True,
-            **kwargs,
         }
+        if temperature:
+            data["temperature"] = temperature
+        if kwargs:
+            data.update(kwargs)
+
+        if debug:
+            fp = "sample_anthropic.json"
+            print("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
+
         r = requests.post(
             self.base_url,
             headers=headers,
@@ -180,36 +212,41 @@ class Anthropic:
             print(r.text)
             raise e
 
+        fn_call = None
         for line in r.iter_lines():
             line = line.decode().strip()
             if not "data:" in line or not line:
                 continue
 
-            # create openai style raw response
-            if raw:
-                try:
-                    resp = json.loads(line.replace("data:", "").strip())
-                    if "delta" in resp:
-                        yield (
-                            "data: "
-                            + to_json(
-                                {
-                                    "choices": [
-                                        {"delta": {"content": resp["delta"]["text"]}}
-                                    ]
-                                },
-                                tight=True,
-                            )
-                        ).encode() + b"\r\n"
-                except:
-                    yield line.encode() + b"\r\n"
-                continue
-
-            # return token
             try:
                 resp = json.loads(line.replace("data:", "").strip())
-                if "delta" in resp:
-                    yield resp["delta"]["text"]
+                if resp["type"] == "content_block_start":
+                    if resp["content_block"]["type"] == "tool_use":
+                        fn_call = {
+                            "name": resp["content_block"]["name"],
+                            "arguments": "",
+                        }
+                elif resp["type"] == "content_block_delta":
+                    delta = resp["delta"]
+                    delta_type = delta["type"]
+                    if delta_type == "text_delta":
+                        if raw:
+                            yield tu.to_json(
+                                {
+                                    "object": delta_type,
+                                    "choices": [{"delta": {"content": delta["text"]}}],
+                                },
+                                tight=True,
+                            ).encode()
+                        else:
+                            yield delta["text"]
+                    elif delta_type == "input_json_delta":
+                        fn_call["arguments"] += delta["partial_json"]
+                elif resp["type"] == "content_block_stop":
+                    if fn_call:
+                        fn_call["arguments"] = json.loads(fn_call["arguments"])
+                        yield fn_call
+                        fn_call = None
             except:
                 break
         return

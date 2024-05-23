@@ -1,11 +1,12 @@
 # Copyright © 2024- Frello Technology Private Limited
+# https://ai.google.dev/gemini-api/docs/function-calling
 
 import json
 import requests
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Any
 
-from tuneapi.utils import ENV, SimplerTimes as stime, from_json, to_json
-from tuneapi.types import Thread, human, Message
+import tuneapi.utils as tu
+import tuneapi.types as tt
 
 
 class Gemini:
@@ -16,7 +17,7 @@ class Gemini:
     ):
         self._gemeni_model_id = id
         self.base_url = base_url
-        self.gemini_token = ENV.GEMINI_TOKEN("")
+        self.gemini_token = tu.ENV.GEMINI_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
         self.gemini_token = token
@@ -26,28 +27,75 @@ class Gemini:
             raise Exception(
                 "Gemini API key not found. Please set GEMINI_TOKEN environment variable or pass through function"
             )
-        if isinstance(chats, Thread):
-            messages_tt = chats.to_dict()["chats"]
+        if isinstance(chats, tt.Thread):
+            thread = chats
         elif isinstance(chats, str):
-            messages_tt = Thread(human(chats)).to_dict()["chats"]
+            thread = tt.Thread(tt.human(chats))
         else:
-            messages_tt = chats
+            raise Exception("Invalid input")
 
-        # create body
-        # - multiple assistants works
+        system = ""
+        if thread.chats[0].role == tt.Message.SYSTEM:
+            system = thread.chats[0].value
+
         messages = []
-        for m in messages_tt:
-            messages.append(
-                {
-                    "role": m["role"],
-                    "parts": [{"text": m["content"]}],
-                }
-            )
+        prev_fn_name = ""
+        for m in thread.chats[int(system != "") :]:
+            if m.role == tt.Message.HUMAN:
+                messages.append(
+                    {
+                        "role": "user",
+                        "parts": [{"text": m.value}],
+                    }
+                )
+            elif m.role == tt.Message.GPT:
+                messages.append(
+                    {
+                        "role": "model",
+                        "parts": [{"text": m.value}],
+                    }
+                )
+            elif m.role == tt.Message.FUNCTION_CALL:
+                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                prev_fn_name = _m["name"]
+                messages.append(
+                    {
+                        "role": "model",
+                        "parts": [
+                            {
+                                "functionCall": {
+                                    "name": _m["name"],
+                                    "args": _m["arguments"],
+                                }
+                            }
+                        ],
+                    }
+                )
+            elif m.role == tt.Message.FUNCTION_RESP:
+                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                messages.append(
+                    {
+                        "role": "function",
+                        "parts": [
+                            {
+                                "functionResponse": {
+                                    "name": prev_fn_name,
+                                    "response": {
+                                        "name": prev_fn_name,
+                                        "content": _m,
+                                    },
+                                }
+                            }
+                        ],
+                    }
+                )
+            else:
+                raise Exception(f"Unknown role: {m.role}")
 
         # create headers
         headers = self._process_header()
         params = {"key": self.gemini_token}
-        return headers, messages, params
+        return headers, system.strip(), messages, params
 
     def _process_header(self):
         return {
@@ -56,7 +104,7 @@ class Gemini:
 
     def chat(
         self,
-        chats: Thread | str,
+        chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 1,
@@ -66,7 +114,7 @@ class Gemini:
         **kwargs,
     ) -> Any:
         output = ""
-        for i in self.stream_chat(
+        for x in self.stream_chat(
             chats=chats,
             model=model,
             max_tokens=max_tokens,
@@ -76,22 +124,32 @@ class Gemini:
             raw=raw,
             **kwargs,
         ):
-            output += i
+            if isinstance(x, dict):
+                output = x
+            else:
+                output += x
         return output
 
     def stream_chat(
         self,
-        chats: Thread | str,
+        chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=(5, 60),
         raw: bool = False,
+        debug: bool = False,
         **kwargs,
     ):
-        headers, messages, params = self._process_input(chats, token)
+        tools = []
+        if isinstance(chats, tt.Thread):
+            tools = [x.to_dict() for x in chats.tools]
+        headers, system, messages, params = self._process_input(chats, token)
         data = {
+            "systemInstruction": {
+                "parts": [{"text": system}],
+            },
             "contents": messages,
             "generationConfig": {
                 "temperature": temperature,
@@ -119,7 +177,19 @@ class Gemini:
                 },
             ],
         }
+        if tools:
+            data["tool_config"] = {
+                "function_calling_config": {
+                    "mode": "ANY",
+                }
+            }
+            data["tools"] = [{"function_declarations": tools}]
         data.update(kwargs)
+
+        if debug:
+            fp = "sample_gemini.json"
+            print("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
 
         response = requests.post(
             self.base_url.format(
@@ -143,9 +213,6 @@ class Gemini:
         for lno, line in enumerate(response.iter_lines()):
             line = line.decode("utf-8")
             # print(f"[{lno:03d}] {line}")
-            if raw:
-                yield line
-                continue
 
             # get the clean line for block
             if line == ("[{"):  # first line
@@ -161,7 +228,22 @@ class Gemini:
                 done = True
 
             if done:
-                yield json.loads(block_lines)["candidates"][0]["content"]["parts"][0][
-                    "text"
-                ]
+                part_data = json.loads(block_lines)["candidates"][0]["content"][
+                    "parts"
+                ][0]
+                if "text" in part_data:
+                    if raw:
+                        yield tu.to_json(
+                            {
+                                "object": "gemini_text",
+                                "choices": [{"delta": {"content": part_data["text"]}}],
+                            },
+                            tight=True,
+                        ).encode()
+                    else:
+                        yield part_data["text"]
+                elif "functionCall" in part_data:
+                    fn_call = part_data["functionCall"]
+                    fn_call["arguments"] = fn_call.pop("args")
+                    yield fn_call
                 block_lines = ""

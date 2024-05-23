@@ -4,6 +4,8 @@ import json
 import requests
 from typing import Optional, Dict, Any, Tuple, List
 
+import tuneapi.utils as tu
+import tuneapi.types as tt
 from tuneapi.utils import ENV, SimplerTimes as stime, from_json, to_json
 from tuneapi.types import Thread, human, Message
 
@@ -14,7 +16,7 @@ class Mistral:
         id: Optional[str] = "mistral-small-latest",
         base_url: str = "https://api.mistral.ai/v1/chat/completions",
     ):
-        self.groq_model_id = id
+        self.mistral_model_id = id
         self.base_url = base_url
         self.mistral_api_token = ENV.MISTRAL_TOKEN("")
 
@@ -27,18 +29,63 @@ class Mistral:
                 "Please set MISTRAL_TOKEN environment variable or pass through function"
             )
         token = token or self.mistral_api_token
-        if isinstance(chats, Thread):
-            messages = chats.to_dict()["chats"]
+
+        if isinstance(chats, tt.Thread):
+            thread = chats
         elif isinstance(chats, str):
-            messages = Thread(human(chats)).to_dict()["chats"]
+            thread = tt.Thread(tt.human(chats))
         else:
-            messages = chats
+            raise Exception("Invalid input")
+
+        prev_tool_id = tu.get_random_string(5)
+        final_messages = []
+        for i, m in enumerate(thread.chats):
+            if m.role == tt.Message.SYSTEM:
+                final_messages.append({"role": "system", "content": m.value})
+            elif m.role == tt.Message.HUMAN:
+                final_messages.append({"role": "user", "content": m.value})
+            elif m.role == tt.Message.GPT:
+                final_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": m.value.strip(),
+                    }
+                )
+            elif m.role == tt.Message.FUNCTION_CALL:
+                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                final_messages.append(
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "type": "function",
+                                "id": prev_tool_id,
+                                "function": {
+                                    "name": _m["name"],
+                                    "arguments": tu.to_json(_m["arguments"]),
+                                },
+                            }
+                        ],
+                    }
+                )
+            elif m.role == tt.Message.FUNCTION_RESP:
+                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                final_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": prev_tool_id,
+                        "content": tu.to_json(_m, tight=True),
+                    }
+                )
+                prev_tool_id = tu.get_random_string(5)  # reset tool id
+            else:
+                raise Exception(f"Invalid message type: {m.role}")
 
         headers = {
             "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
         }
-        return headers, messages
+        return headers, final_messages
 
     def chat(
         self,
@@ -47,18 +94,23 @@ class Mistral:
         max_tokens: int = 1024,
         temperature: float = 1,
         token: Optional[str] = None,
+        timeout=(5, 30),
         **kwargs,
-    ) -> Any:
+    ) -> str | Dict[str, Any]:
         output = ""
-        for i in self.stream_chat(
+        for x in self.stream_chat(
             chats=chats,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
+            timeout=timeout,
             **kwargs,
         ):
-            output += i
+            if isinstance(x, dict):
+                output = x
+            else:
+                output += x
         return output
 
     def stream_chat(
@@ -70,17 +122,26 @@ class Mistral:
         token: Optional[str] = None,
         timeout=(5, 60),
         raw: bool = False,
+        debug: bool = False,
     ):
+        tools = []
+        if isinstance(chats, Thread):
+            tools = [{"type": "function", "function": x.to_dict()} for x in chats.tools]
         headers, messages = self._process_input(chats, token)
         data = {
-            "temperature": temperature,
             "messages": messages,
-            "model": model or self.groq_model_id,
+            "model": model or self.mistral_model_id,
             "stream": True,
             "max_tokens": max_tokens,
+            "tools": tools,
         }
-        # for m in messages:
-        #     print(m)
+        if temperature:
+            data["temperature"] = temperature
+        if debug:
+            fp = "sample_mistral.json"
+            print("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
+
         response = requests.post(
             self.base_url,
             headers=headers,
@@ -94,6 +155,7 @@ class Mistral:
             print(response.text)
             raise e
 
+        fn_call = None
         for line in response.iter_lines():
             if raw:
                 yield line
@@ -102,9 +164,18 @@ class Mistral:
             line = line.decode().strip()
             if line:
                 try:
-                    yield json.loads(line.replace("data: ", ""))["choices"][0]["delta"][
-                        "content"
-                    ]
+                    x = json.loads(line.replace("data: ", ""))["choices"][0]["delta"]
+                    if "tool_calls" not in x:
+                        yield x["content"]
+                    else:
+                        y = x["tool_calls"][0]["function"]
+                        if fn_call is None:
+                            fn_call = {"name": y["name"], "arguments": y["arguments"]}
+                        else:
+                            fn_call["arguments"] += y["arguments"]
                 except:
                     break
+        if fn_call:
+            fn_call["arguments"] = from_json(fn_call["arguments"])
+            yield fn_call
         return

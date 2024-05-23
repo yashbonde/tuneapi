@@ -7,7 +7,76 @@ from functools import partial
 from collections.abc import Iterable
 from typing import Dict, List, Any, Tuple, Optional, Generator, Union
 
-from tuneapi.utils import to_json, get_random_string, logger
+from tuneapi.utils import to_json, get_random_string, logger, from_json
+
+
+class Tool:
+
+    class Prop:
+        def __init__(
+            self,
+            name: str,
+            description: str,
+            type: str,
+            required: bool = False,
+            items: Optional[Dict] = None,
+            enum: Optional[List[str]] = None,
+        ):
+            self.name = name
+            self.description = description
+            self.required = required
+            self.type = type
+            self.items = items
+            self.enum = enum
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        parameters: List["Tool.Prop"],
+    ):
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+
+    def __repr__(self) -> str:
+        return f"<Tool: {self.name}>"
+
+    def to_dict(self):
+        properties = {}
+        required = []
+        for x in self.parameters:
+            properties[x.name] = {
+                "type": x.type,
+                "description": x.description,
+            }
+            if x.items:
+                properties[x.name]["items"] = x.items
+            if x.enum:
+                properties[x.name]["enum"] = x.enum
+            if x.required:
+                required.append(x.name)
+
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, x):
+        parameters = []
+        for k, v in x["parameters"].get("properties", {}).items():
+            parameters.append(cls.Prop(name=k, **v))
+        return cls(
+            name=x["name"],
+            description=x["description"],
+            parameters=parameters,
+        )
 
 
 class Message:
@@ -36,9 +105,6 @@ class Message:
         "function-call": FUNCTION_CALL,
         "function_resp": FUNCTION_RESP,
         "function-resp": FUNCTION_RESP,
-        # tools
-        "tools": TOOLS,
-        "tool": TOOLS,
     }
 
     # start initialization here
@@ -126,7 +192,8 @@ class Message:
 human = partial(Message, role=Message.HUMAN)
 system = partial(Message, role=Message.SYSTEM)
 assistant = partial(Message, role=Message.GPT)
-tools = partial(Message, role=Message.TOOLS)
+function_call = partial(Message, role=Message.FUNCTION_CALL)
+function_resp = partial(Message, role=Message.FUNCTION_RESP)
 
 
 class Thread:
@@ -145,6 +212,7 @@ class Thread:
         model: Optional[str] = None,
         id: str = "",
         title: str = "",
+        tools: List[Tool] = [],
         **kwargs,
     ):
         self.chats = list(chats)
@@ -152,6 +220,7 @@ class Thread:
         self.model = model
         self.id = id
         self.title = title
+        self.tools = tools
 
         #
         kwargs = {k: v for k, v in sorted(kwargs.items())}
@@ -174,6 +243,8 @@ class Thread:
             x += f"{k}={v} "
         for c in self.chats:
             x += f"\n  {c}"
+        if self.tools:
+            x += f"\n  <tools: {[x.name for x in self.tools]}>"
         x += "\n>"
         return x
 
@@ -196,9 +267,11 @@ class Thread:
                 "meta": self.meta,
                 "title": self.title,
                 "id": self.id,
+                "tools": [x.to_dict() for x in self.tools],
             }
         return {
             "chats": [x.to_dict() for x in self.chats],
+            "tools": [x.to_dict() for x in self.tools],
         }
 
     @classmethod
@@ -212,6 +285,7 @@ class Thread:
             jl=data.get("jl", ""),
             model=data.get("model", ""),
             title=data.get("title", ""),
+            tools=[Tool.from_dict(x) for x in data.get("tools", [])],
             **data.get("meta", {}),
         )
 
@@ -474,8 +548,7 @@ class Dataset:
             raise ValueError(f"File '{folder}/tune_config.json' does not exist")
 
         # not sure what to do with these
-        with open(f"{folder}/tune_config.json", "r") as f:
-            config = json.load(f)
+        config = from_json(f"{folder}/tune_config.json")
         return cls(
             train=ThreadsList.from_disk(f"{folder}/train"),
             eval=ThreadsList.from_disk(f"{folder}/eval"),
