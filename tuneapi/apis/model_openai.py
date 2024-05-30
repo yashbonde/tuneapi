@@ -76,7 +76,7 @@ class Openai:
                 )
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
             else:
-                raise Exception(f"Invalid message type: {m.role}")
+                raise Exception(f"Invalid message role: {m.role}")
 
         headers = self._process_header(token)
         return headers, final_messages

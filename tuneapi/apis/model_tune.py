@@ -84,7 +84,7 @@ class TuneModel:
                 )
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
             else:
-                raise Exception(f"Invalid message type: {m.role}")
+                raise Exception(f"Invalid message role: {m.role}")
 
         headers = {
             "Authorization": token,
@@ -131,11 +131,16 @@ class TuneModel:
         raw: bool = False,
         debug: bool = False,
     ):
+        model = model or self.tune_model_id
+        if not model:
+            raise Exception(
+                "Tune Model ID not found. Please set TUNEAPI_MODEL environment variable or pass through function"
+            )
         headers, messages = self._process_input(chats, token)
         data = {
             "temperature": temperature,
             "messages": messages,
-            "model": model or self.tune_model_id,
+            "model": model,
             "stream": True,
             "max_tokens": max_tokens,
         }

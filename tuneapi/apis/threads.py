@@ -41,7 +41,7 @@ class ThreadsAPI:
         self.tune_api_key = tune_api_key or ENV.TUNE_API_KEY()
         if not tune_api_key:
             raise ValueError("Either pass tune_api_key or set Env var TUNE_API_KEY")
-        self.sub = get_sub(self.tune_org_id, self.tune_api_key).threads
+        self.sub = get_sub(self.tune_org_id, self.tune_api_key)
 
     def set_token_and_org_id(
         self,
@@ -66,7 +66,7 @@ class ThreadsAPI:
             logger.warning(
                 "Can only update title and metadata, messages will be ignored"
             )
-            fn = self.sub.u(thread.id)
+            fn = self.sub.threads.u(thread.id)
             out = fn(
                 "post",
                 json={
@@ -76,7 +76,7 @@ class ThreadsAPI:
             )
         else:
             logger.warning("Creating new thread")
-            out = self.sub(
+            out = self.sub.threads(
                 "post",
                 json={
                     "title": thread.title,
@@ -95,7 +95,7 @@ class ThreadsAPI:
         messages: bool = False,
     ) -> tt.Thread:
         # GET /threads/{thread_id}
-        fn = self.sub.u(thread_id)
+        fn = self.sub.threads.u(thread_id)
         data = fn()
         data.pop("object")
         meta = data.pop("metadata", {})
@@ -106,7 +106,7 @@ class ThreadsAPI:
 
         if messages:
             # GET /threads/{thread_id}/messages
-            fn = self.sub.u(thread_id).messages
+            fn = self.sub.threads.u(thread_id).messages
             data = fn()
             for m in data["data"]:
                 text_items = list(filter(lambda x: x["type"] == "text", m["content"]))
@@ -122,4 +122,55 @@ class ThreadsAPI:
                     },
                 )
                 thread.append(msg)
+        return thread
+
+    def list_threads(
+        self,
+        limit: int = 20,
+        order: Optional[str] = "desc",
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+        dataset_id: Optional[str] = None,
+    ) -> List[tt.Thread]:
+        # GET /threads
+        fn = self.sub.threads
+        params = {
+            "limit": limit,
+            "order": order,
+        }
+        if after:
+            params["after"] = after
+        if before:
+            params["before"] = before
+        if dataset_id:
+            params["datasetId"] = dataset_id
+        data = fn(params=params)
+        all_threads = []
+        for x in data["data"]:
+            x.pop("object")
+            meta = x.pop("metadata", {})
+            for k, v in meta.items():
+                if k not in data:
+                    x[k] = v
+            all_threads.append(tt.Thread(**x))
+        return all_threads
+
+    def fill_thread_messages(self, thread: tt.Thread):
+        # GET /threads/{thread_id}/messages
+        fn = self.sub.threads.u(thread.id).messages
+        data = fn()
+        for m in data["data"]:
+            text_items = list(filter(lambda x: x["type"] == "text", m["content"]))
+            if len(text_items) != 1:
+                raise ValueError(f"Can handle one text only got: {len(text_items)}")
+            msg = tt.Message(
+                value=text_items[0]["text"]["value"],
+                role=m["role"],
+                **{
+                    "id": m["id"],
+                    "createdAt": m["createdAt"],
+                    "metadata": m["metadata"],
+                },
+            )
+            thread.append(msg)
         return thread

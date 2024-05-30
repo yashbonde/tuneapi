@@ -7,6 +7,7 @@ from functools import partial
 from collections.abc import Iterable
 from typing import Dict, List, Any, Tuple, Optional, Generator, Union
 
+import tuneapi.utils as tu
 from tuneapi.utils import to_json, get_random_string, logger, from_json
 
 
@@ -108,15 +109,21 @@ class Message:
     }
 
     # start initialization here
-    def __init__(self, value: str | float | List[Dict[str, Any]], role: str, **kwargs):
+    def __init__(
+        self,
+        value: str | float | List[Dict[str, Any]],
+        role: str,
+        id: str = None,
+        **kwargs,
+    ):
         if role not in self.KNOWN_ROLES:
             raise ValueError(f"Unknown role: {role}. Update dictionary `KNOWN_ROLES`")
         if value is None:
             raise ValueError("value cannot be None")
 
-        self.role = role
+        self.role = self.KNOWN_ROLES[role]
         self.value = value
-        self._unq_value = get_random_string(6)
+        self.id = id or tu.get_snowflake()
         self.metadata = kwargs
 
     def __str__(self) -> str:
@@ -148,12 +155,14 @@ class Message:
         """
         if format == `ft` then export to following format: `{"from": "system/human/gpt", "value": "..."}`
         elif format == `api` then `{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}`
+        elif format == `full` then `{"id": 1234421123, "role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}`
         else export to following format: `{"role": "system/user/assistant", "content": "..."}`
         """
         role = self.role
 
         ft = format == "ft"
-        api = format == "api"
+        api = format in ["api", "full"]
+        full = format == "full"
 
         if not ft:
             if self.role == self.HUMAN:
@@ -176,6 +185,9 @@ class Message:
 
         if meta:
             chat_message["metadata"] = self.metadata
+
+        if full:
+            chat_message["id"] = self.id
 
         return chat_message
 
@@ -317,6 +329,19 @@ class Thread:
 
     def append(self, message: Message):
         self.chats.append(message)
+
+
+class ThreadTree:
+    """This is the tree representation of a thread, where each leaf is a Message object."""
+
+    def __init__(
+        self,
+        message: Message,
+        parent_message: Message,
+    ):
+        self.children = []
+        self.parent_id = parent_message.id or tu.get_snowflake()
+        self.id = message.id or tu.get_snowflake()
 
 
 # these are the classes that we use for tune datasets from r-stack

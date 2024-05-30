@@ -79,7 +79,7 @@ class Mistral:
                 )
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
             else:
-                raise Exception(f"Invalid message type: {m.role}")
+                raise Exception(f"Invalid message role: {m.role}")
 
         headers = {
             "Authorization": "Bearer " + token,
