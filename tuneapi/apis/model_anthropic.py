@@ -152,15 +152,18 @@ class Anthropic:
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
+            raw=False,
             **kwargs,
         ):
             if isinstance(i, dict):
-                fn_call = i
+                fn_call = i.copy()
             else:
                 output += i
         if return_message:
             return output, fn_call
-        return fn_call
+        if fn_call:
+            return fn_call
+        return output
 
     def stream_chat(
         self,
@@ -219,6 +222,7 @@ class Anthropic:
                 continue
 
             try:
+                # print(line)
                 resp = json.loads(line.replace("data:", "").strip())
                 if resp["type"] == "content_block_start":
                     if resp["content_block"]["type"] == "tool_use":
@@ -231,20 +235,21 @@ class Anthropic:
                     delta_type = delta["type"]
                     if delta_type == "text_delta":
                         if raw:
-                            yield tu.to_json(
+                            yield b"data: " + tu.to_json(
                                 {
                                     "object": delta_type,
                                     "choices": [{"delta": {"content": delta["text"]}}],
                                 },
                                 tight=True,
                             ).encode()
+                            yield b""  # uncomment this line if you want 1:1 with OpenAI
                         else:
                             yield delta["text"]
                     elif delta_type == "input_json_delta":
                         fn_call["arguments"] += delta["partial_json"]
                 elif resp["type"] == "content_block_stop":
                     if fn_call:
-                        fn_call["arguments"] = json.loads(fn_call["arguments"])
+                        fn_call["arguments"] = json.loads(fn_call["arguments"] or "{}")
                         yield fn_call
                         fn_call = None
             except:

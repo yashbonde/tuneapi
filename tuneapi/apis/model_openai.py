@@ -130,7 +130,7 @@ class Openai:
             "stream": True,
             "max_tokens": max_tokens,
         }
-        if isinstance(chats, tt.Thread):
+        if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
             ]
