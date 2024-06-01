@@ -4,6 +4,7 @@ from tuneapi.types.chats import (
     Message,
     Thread,
     ThreadsList,
+    TreeThread,
     Tool,
     system,
     human,

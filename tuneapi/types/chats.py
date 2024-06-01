@@ -1,14 +1,16 @@
 # Copyright © 2023- Frello Technology Private Limited
 
+import io
 import os
 import json
+import copy
 import random
 from functools import partial
 from collections.abc import Iterable
 from typing import Dict, List, Any, Tuple, Optional, Generator, Union
+import nutree as nt
 
 import tuneapi.utils as tu
-from tuneapi.utils import to_json, get_random_string, logger, from_json
 
 
 class Tool:
@@ -29,6 +31,9 @@ class Tool:
             self.type = type
             self.items = items
             self.enum = enum
+
+        def __repr__(self) -> str:
+            return f"<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
 
     def __init__(
         self,
@@ -87,7 +92,6 @@ class Message:
     GPT = "gpt"
     FUNCTION_CALL = "function_call"
     FUNCTION_RESP = "function_resp"
-    TOOLS = "tools"
 
     # mapping from known roles to our standard roles
     KNOWN_ROLES = {
@@ -114,6 +118,7 @@ class Message:
         value: str | float | List[Dict[str, Any]],
         role: str,
         id: str = None,
+        fn_pairs: Optional[Tuple["Message", "Message"]] = None,
         **kwargs,
     ):
         if role not in self.KNOWN_ROLES:
@@ -123,8 +128,9 @@ class Message:
 
         self.role = self.KNOWN_ROLES[role]
         self.value = value
-        self.id = id or tu.get_snowflake()
+        self.id = id or "msg_" + str(tu.get_snowflake())
         self.metadata = kwargs
+        self.fn_pairs = fn_pairs
 
     def __str__(self) -> str:
         try:
@@ -133,14 +139,22 @@ class Message:
             idx = 50
         return f"<{self.role}: {json.dumps(self.value)[:idx]}>"
 
-    def __radd__(self, other):
+    def __radd__(self, other: str):
         return Message(self.value + other, self.role)
 
-    def __add__(self, other):
+    def __add__(self, other: str):
         return Message(self.value + other, self.role)
 
     def __repr__(self) -> str:
-        return str(self.value)
+        out = ""
+        if self.fn_pairs:
+            for fc, fr in self.fn_pairs:
+                out += f"[[FC] {fc} => [FR] {fr}]"
+        if out:
+            out += " " + str(self.value)
+        else:
+            out = str(self.value)
+        return out
 
     def __getitem__(self, x):
         if x == "content":
@@ -196,6 +210,7 @@ class Message:
         return cls(
             value=data.get("value") or data.get("content"),
             role=data.get("from") or data.get("role"),
+            id=data.get("id"),
             **data.get("metadata", {}),
         )  # type: ignore
 
@@ -230,7 +245,7 @@ class Thread:
         self.chats = list(chats)
         self.jl = jl
         self.model = model
-        self.id = id
+        self.id = id or "thread_" + str(tu.get_snowflake())
         self.title = title
         self.tools = tools
 
@@ -306,7 +321,7 @@ class Thread:
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         chats = self.chats if not drop_last else self.chats[:-1]
         ft_dict = {
-            "id": id or get_random_string(6),
+            "id": id or tu.get_random_string(6),
             "conversations": [x.to_dict(format="ft") for x in chats],
         }
         if drop_last:
@@ -331,17 +346,241 @@ class Thread:
         self.chats.append(message)
 
 
-class ThreadTree:
-    """This is the tree representation of a thread, where each leaf is a Message object."""
+class TreeThread:
+    """
+    This is the tree representation of a thread, where each node is a Message object. Useful for regeneration and
+    searching through a tree of conversations. This is a container providing all the necessary APIs.
+    """
 
     def __init__(
-        self,
-        message: Message,
-        parent_message: Message,
+        self, *msgs: Union[List[Union[List, Message]], Message], id: str = None
     ):
-        self.children = []
-        self.parent_id = parent_message.id or tu.get_snowflake()
-        self.id = message.id or tu.get_snowflake()
+        system = ""
+        if (
+            len(msgs)
+            and isinstance(msgs[0], Message)
+            and msgs[0].role == Message.SYSTEM
+        ):
+            system = msgs[0].value
+        if system:
+            msgs = msgs[1:]
+
+        self.id = id or "tree_" + str(tu.get_snowflake())
+        self.system = system
+        self.msg_counter = 0  # monotonically increasing counter
+        self.messages_map = {}
+        self.messages = {}
+
+        self.tree = nt.Tree(name=self.id)
+        if msgs:
+            self._add_children_to_parent(self.tree, msgs)
+
+    def __repr__(self) -> str:
+        if self.system and " <system>" not in self.tree.name:
+            self.tree.name += " <system>"
+        elif not self.system and self.tree.name.endswith(" <system>"):
+            self.tree.name = self.tree.name[:-9]
+        return self.tree.format()
+
+    def __getitem__(self, x) -> Message:
+        try:
+            if type(x) == int:
+                return self.messages[self.messages_map[x]]
+            elif type(x) == str:
+                return self.messages[x]
+            elif isinstance(x, Message):
+                return self.messages[x.id]
+            elif isinstance(x, nt.Node):
+                return self.messages[x.data_id]
+        except KeyError:
+            raise ValueError(f"Message with id '{x}' not found")
+        raise ValueError(f"Unknown type: {type(x)}")
+
+    def _get_parent_message(self, message: Message) -> Message:
+        if not isinstance(message, Message):
+            message = self[message]
+        parent_node = self.tree.find(data_id=message.id).parent
+        return self.messages[parent_node.data_id]
+
+    def _get_parent_node(self, message: Message) -> nt.Node:
+        message = self._get_parent_message(message)
+        return self.tree.find(data_id=message.id).parent
+
+    def _add_children_to_parent(
+        self,
+        parent_node: Union[nt.Tree, nt.Node],
+        children: List[Union[List, Message]],
+    ) -> None:
+        for child in children:
+            if isinstance(child, Message):
+                if not isinstance(parent_node, nt.Tree):
+                    lm = self.messages[parent_node.data_id]
+                    if lm.role == child.role:
+                        raise ValueError(
+                            f"Same consecutive roles: {self.latest_message.role} -> {child.role}"
+                        )
+
+                parent_node = parent_node.add(
+                    f"[{self.msg_counter:02d}] " + str(child),
+                    data_id=child.id,
+                )
+                self.messages_map[self.msg_counter] = child.id
+                self.messages[child.id] = child
+                self.msg_counter += 1
+            if isinstance(child, list):
+                # if this is a list then there are two possibilities:
+                # - regeneration: all items are assistant type
+                # - reprompt: all items are human type
+                self._add_children_to_parent(parent_node, child)
+
+    @property
+    def latest_node(self) -> nt.Node:
+        done = False
+        cntr = copy.deepcopy(self.msg_counter)
+        while not done:
+            try:
+                return self.tree.find(data_id=self.messages_map[cntr - 1])
+            except KeyError:
+                cntr -= 1
+                if cntr == 0:
+                    done = True
+        raise ValueError("No latest node found")
+
+    @property
+    def latest_message(self) -> Message:
+        return self.messages[self.latest_node.data_id]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "system": self.system,
+            "messages": [x.to_dict(format="full") for x in self.messages.values()],
+            "tree": self.tree.to_dict_list(),
+            "messages_map": self.messages_map,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TreeThread":
+        tree = cls()
+        tree.id = data["id"]
+        tree.system = data["system"]
+        tree.tree = nt.Tree.from_dict(data["tree"])
+        messages = [Message.from_dict(x) for x in data["messages"]]
+        tree.messages = {x.id: x for x in messages}
+        tree.messages_map = data["messages_map"]
+        tree.msg_counter = len(tree.messages) + 1
+        return tree
+
+    def add(self, child: Message, to: Message = None) -> "TreeThread":
+        if child.id in self.messages:
+            raise ValueError(
+                f"Message with id '{child.id}' already exists. Cycle detected."
+            )
+        if to is None:
+            # find the latest inserted message and just add this as a child
+            to = self.latest_message
+        to = self[to]
+        if to.id not in self.messages:
+            raise ValueError(f"Parent with id {to.id} not found. Insert parent first.")
+
+        self._add_children_to_parent(
+            self.tree.find(data_id=to.id),  # find the actual nutree.Node
+            [child],
+        )
+        return self
+
+    def delete(self, from_: Message) -> "TreeThread":
+        from_ = self[from_]
+        if from_.id not in self.messages:
+            raise ValueError(
+                f"Parent with id {from_.id} not found. Insert parent first."
+            )
+        from_node = self.tree.find(data_id=from_.id)
+
+        messages_map_inv = {v: k for k, v in self.messages_map.items()}
+
+        def _cleanup(node, _):
+            del self.messages[node.data_id]
+            del self.messages_map[messages_map_inv[node.data_id]]
+
+        if from_node.children:
+            from_node.visit(_cleanup, add_self=True)
+        else:
+            del self.messages[from_node.data_id]
+            del self.messages_map[messages_map_inv[from_node.data_id]]
+        from_node.remove(keep_children=False)
+        return self
+
+    def undo(self) -> "TreeThread":
+        return self.delete(self.latest_message)
+
+    def regenerate_stream(
+        self,
+        from_: Message,
+        api: object,
+        prompt: str = None,
+        dry: bool = False,
+        **api_kwargs,
+    ):
+        # validation on inputs for regeneration
+        from_ = self[from_]
+
+        if from_.role == Message.HUMAN:
+            # if we are regenerating for a human, then we need to add a prompt to the tree and then regenerate
+            if not prompt:
+                raise ValueError(
+                    f"Regenerating for role 'human' but no `prompt` provided. pass `prompt`"
+                )
+            if type(prompt) == str:
+                prompt = human(prompt)
+            self.add(prompt, to=self._get_parent_message(from_))
+            thread = Thread()
+            for x in self.tree.find(data_id=prompt.id).get_parent_list():
+                thread.append(self.messages[x.data_id])
+            thread.append(prompt)
+        else:
+            # if regenerating AI response then we just need to get till the parent message because that is guaranteed
+            # to be a human
+            if prompt:
+                raise ValueError(
+                    f"Regenerating for role 'gpt' but `prompt` provided. remove `prompt`"
+                )
+            thread = Thread()
+            for x in self.tree.find(data_id=from_.id).get_parent_list():
+                thread.append(self.messages[x.data_id])
+
+        if dry:
+            stream = (x + " " for x in "... I have been generated ...".split())
+        else:
+            stream = api.stream_chat(thread, **api_kwargs)
+
+        full_str = ""
+        for token in stream:
+            yield token
+            if isinstance(token, dict):
+                raise ValueError("Function call occured, not sure what to do")
+            full_str += token
+        self.add(assistant(full_str), to=thread.chats[-1])
+
+    def regenerate(
+        self,
+        from_: Message,
+        api: object,
+        prompt: str = None,
+        dry: bool = False,
+        **api_kwargs,
+    ):
+        return "".join(
+            list(
+                self.regenerate_stream(
+                    from_,
+                    api,
+                    prompt=prompt,
+                    dry=dry,
+                    **api_kwargs,
+                )
+            )
+        )
 
 
 # these are the classes that we use for tune datasets from r-stack
@@ -477,7 +716,7 @@ class ThreadsList(list):
 
     def to_disk(self, folder: str, fmt: Optional[str] = None):
         if fmt:
-            logger.warn(
+            tu.logger.warn(
                 f"exporting to {fmt} format, you cannot recreate the dataset from this."
             )
         os.makedirs(folder)
@@ -489,7 +728,7 @@ class ThreadsList(list):
                     item = sample.to_dict()
                 else:
                     raise ValueError(f"Unknown format: {fmt}")
-                f.write(to_json(item, tight=True) + "\n")  # type: ignore
+                f.write(tu.to_json(item, tight=True) + "\n")  # type: ignore
 
     @classmethod
     def from_disk(cls, folder: str):
@@ -559,7 +798,7 @@ class Dataset:
         os.makedirs(folder)
         self.train_ds.to_disk(f"{folder}/train", fmt=fmt)
         self.eval_ds.to_disk(f"{folder}/eval", fmt=fmt)
-        to_json(config, fp=f"{folder}/tune_config.json", tight=True)
+        tu.to_json(config, fp=f"{folder}/tune_config.json", tight=True)
 
     @classmethod
     def from_disk(cls, folder: str):
@@ -573,7 +812,7 @@ class Dataset:
             raise ValueError(f"File '{folder}/tune_config.json' does not exist")
 
         # not sure what to do with these
-        config = from_json(f"{folder}/tune_config.json")
+        config = tu.from_json(f"{folder}/tune_config.json")
         return cls(
             train=ThreadsList.from_disk(f"{folder}/train"),
             eval=ThreadsList.from_disk(f"{folder}/eval"),

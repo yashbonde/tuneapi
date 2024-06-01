@@ -28,9 +28,12 @@ class SFGen:
         self.gen = SnowflakeGenerator(instance, epoch=epoch)
         self.lock = Lock()
 
-    def __call__(self) -> int:
+    def __call__(self, as_int=False) -> int:
         with self.lock:
-            return next(self.gen)
+            if as_int:
+                return next(self.gen)
+            else:
+                return f"{next(self.gen):17d}"
 
 
 get_snowflake = SFGen()
