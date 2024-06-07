@@ -3,9 +3,9 @@ import tuneapi.types as tt
 from unittest import TestCase, main as ut_main
 
 
-def get_tree():
+def get_tree() -> tt.ThreadsTree:
     # NEVER CHANGE THIS
-    return tt.TreeThread(
+    return tt.ThreadsTree(
         tt.system("You are Tune Blob"),
         [
             tt.human("Who are you?", id="msg_000"),
@@ -66,11 +66,11 @@ def get_tree():
     )
 
 
-class TestTree(TestCase):
+class Test_ThreadsTree(TestCase):
     def test_01_ser_deser(self):
         # ser/deser
         ttree = get_tree()
-        clone = tt.TreeThread.from_dict(ttree.to_dict())
+        clone = tt.ThreadsTree.from_dict(ttree.to_dict())
 
         self.assertEqual(
             clone.tree.diff(ttree.tree, reduce=True).count, 0, "Undo failed"
@@ -78,7 +78,7 @@ class TestTree(TestCase):
 
     def test_02_add_undo(self):
         ttree = get_tree()
-        clone = tt.TreeThread.from_dict(ttree.to_dict())
+        clone = tt.ThreadsTree.from_dict(ttree.to_dict())
 
         # 2 adds
         ttree.add(tt.human("What is 2 + 2?"))
@@ -115,15 +115,25 @@ class TestTree(TestCase):
 
     def test_08_regenerate_gpt(self):
         ttree = get_tree()
-        ttree.regenerate(from_="msg_100", api=None, dry=True)
+        ttree.regenerate(None, "msg_100", dry=True)
 
     def test_09_regenerate_human(self):
         ttree = get_tree()
-        ttree.regenerate(from_="msg_010", api=None, prompt="Hula", dry=True)
+        ttree.regenerate(None, "msg_010", "Hula", dry=True)
 
     def test_10_regenerate_human_fail_no_prompt(self):
         ttree = get_tree()
-        self.assertRaises(ValueError, ttree.regenerate, from_="msg_010", api=None)
+        self.assertRaises(ValueError, ttree.regenerate, None, "msg_010")
+
+
+class Test_Thread(TestCase):
+    def test_01_ser_deser(self):
+        thread = get_tree().pick()
+        tt.Thread.from_dict(thread.to_dict())
+
+    def test_02_copy_paste(self):
+        thread = get_tree().pick()
+        thread.copy()
 
 
 if __name__ == "__main__":

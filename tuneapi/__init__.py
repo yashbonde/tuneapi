@@ -1,3 +1,3 @@
 # Copyright © 2023- Frello Technology Private Limited
 
-__version__ = "0.4.4"
+__version__ = "0.4.6"

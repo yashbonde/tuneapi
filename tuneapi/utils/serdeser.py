@@ -34,7 +34,7 @@ def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:
         return json.dumps(x, **kwargs)
 
 
-def from_json(fp: str = "") -> Dict[str, Any]:
+def from_json(x: str = "") -> Dict[str, Any]:
     """
     Load a JSON string or filepath and return a dictionary.
 
@@ -44,11 +44,15 @@ def from_json(fp: str = "") -> Dict[str, Any]:
     Returns:
 
     """
-    if os.path.exists(fp):
-        with open(fp, "r") as f:
-            return json.load(f)
+    if os.path.exists(x):
+        if x.endswith(".json"):
+            with open(x, "r") as f:
+                return json.load(f)
+        elif x.endswith(".jsonl"):
+            with open(x, "r") as f:
+                return [json.loads(line) for line in f]
     else:
-        return json.loads(fp)
+        return json.loads(x)
 
 
 def to_pickle(obj, path):

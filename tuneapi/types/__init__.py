@@ -4,11 +4,16 @@ from tuneapi.types.chats import (
     Message,
     Thread,
     ThreadsList,
-    TreeThread,
+    ModelInterface,
+    ThreadsTree,
     Tool,
     system,
     human,
     assistant,
     function_call,
     function_resp,
+)
+
+from tuneapi.types.experimental import (
+    Evals,
 )

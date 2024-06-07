@@ -13,6 +13,14 @@ import nutree as nt
 import tuneapi.utils as tu
 
 
+########################################################################################################################
+#
+# The code in this section contains the primitive of this new chat API. The `Tool` class defines tools that the model
+# can predict. The `Message` class defines the container for storing the chat messages.
+#
+########################################################################################################################
+
+
 class Tool:
 
     class Prop:
@@ -223,6 +231,54 @@ function_call = partial(Message, role=Message.FUNCTION_CALL)
 function_resp = partial(Message, role=Message.FUNCTION_RESP)
 
 
+########################################################################################################################
+#
+# The code in this section contains a default model interface that each model API has to provide. All the APIs should
+# follow this interface to be compatible with the chat API.
+#
+########################################################################################################################
+
+
+class ModelInterface:
+    def set_api_token(self, token: str) -> None:
+        """This are used to set the API token for the model"""
+
+    def set_org_id(self, org_id: str) -> None:
+        """This are used to set the Organisation ID for the model"""
+
+    def chat(
+        self,
+        chats: "Thread",
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 1,
+        token: Optional[str] = None,
+        timeout=(5, 30),
+        **kwargs,
+    ) -> str | Dict[str, Any]:
+        """This is the main function to block chat with the model"""
+
+    def stream_chat(
+        self,
+        chats: "Thread",
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 1,
+        token: Optional[str] = None,
+        timeout=(5, 60),
+        raw: bool = False,
+        debug: bool = False,
+    ):
+        """This is the main function to stream chat with the model where each token is iteratively generated"""
+
+
+########################################################################################################################
+#
+# Thread is an array of Messages and / or Tools.
+#
+########################################################################################################################
+
+
 class Thread:
     """
     If the last Message is a "value".
@@ -235,7 +291,7 @@ class Thread:
     def __init__(
         self,
         *chats: Union[List[Message], Message],
-        jl: Optional[Dict[str, Any]] = None,
+        evals: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
         id: str = "",
         title: str = "",
@@ -243,7 +299,7 @@ class Thread:
         **kwargs,
     ):
         self.chats = list(chats)
-        self.jl = jl
+        self.evals = evals
         self.model = model
         self.id = id or "thread_" + str(tu.get_snowflake())
         self.title = title
@@ -272,6 +328,8 @@ class Thread:
             x += f"\n  {c}"
         if self.tools:
             x += f"\n  <tools: {[x.name for x in self.tools]}>"
+        if self.evals:
+            x += f"\n  <evals: {[x for x in self.evals]}>"
         x += "\n>"
         return x
 
@@ -283,13 +341,41 @@ class Thread:
     def __getitem__(self, __x) -> Any:
         return self.chats[__x]
 
+    def __radd__(self, other: "Thread"):
+        thread = self.copy()
+        thread.chats = other.chats + thread.chats
+        tools_added = []
+        for tool in other.tools + thread.tools:
+            if tool.name not in tools_added:
+                tools_added.append(tool)
+                thread.tools.append(tool)
+        thread.meta.update(other.meta)
+        thread.keys = list(thread.meta.keys())
+        thread.values = tuple(thread.meta.values())
+        thread.value_hash = hash(thread.values)
+        return thread
+
+    def __add__(self, other: "Thread"):
+        thread = self.copy()
+        thread.chats = other.chats + thread.chats
+        tools_added = []
+        for tool in other.tools + thread.tools:
+            if tool.name not in tools_added:
+                tools_added.append(tool)
+                thread.tools.append(tool)
+        thread.meta.update(other.meta)
+        thread.keys = list(thread.meta.keys())
+        thread.values = tuple(thread.meta.values())
+        thread.value_hash = hash(thread.values)
+        return thread
+
     # ser/deser
 
     def to_dict(self, full: bool = False):
         if full:
             return {
                 "chats": [x.to_dict() for x in self.chats],
-                "jl": self.jl,
+                "evals": self.evals,
                 "model": self.model,
                 "meta": self.meta,
                 "title": self.title,
@@ -309,7 +395,7 @@ class Thread:
         return cls(
             *[Message.from_dict(x) for x in chats],
             id=data.get("id", ""),
-            jl=data.get("jl", ""),
+            evals=data.get("evals", ""),
             model=data.get("model", ""),
             title=data.get("title", ""),
             tools=[Tool.from_dict(x) for x in data.get("tools", [])],
@@ -332,21 +418,63 @@ class Thread:
 
     def copy(self) -> "Thread":
         return Thread(
-            chats=[x for x in self.chats],
-            jl=self.jl,
+            *[x for x in self.chats],
+            evals=self.evals,
             model=self.model,
             title="Copy: " + self.title,
             **self.meta,
         )
 
-    def add(self, message: Message):
-        self.chats.append(message)
-
     def append(self, message: Message):
         self.chats.append(message)
+        return self
+
+    def pop(self, message: Message = None):
+        if message:
+            for i, x in enumerate(self.chats):
+                if x.id == message.id:
+                    self.chats.pop(i)
+                    break
+        else:
+            self.chats.pop()
+        return self
+
+    # actions
+    def _eval(self, out):
+        if self.evals:
+            evals = {}
+            for k, e in self.evals.items():
+                evals[k] = tu.json_logic(e, {"response": out})
+            return evals
+
+    def step_streaming(self, model: ModelInterface, /, eval: bool = False):
+        out = ""
+        for x in model.stream_chat(self):
+            yield x
+            if isinstance(x, dict):
+                out = x
+            else:
+                out += x
+        if eval:
+            yield self._eval(out)
+        self.append(assistant(out))
+
+    def step(self, model: ModelInterface, /, eval: bool = False):
+        out = model.chat(self)
+        self.append(assistant(out))
+        if eval:
+            return out, self._eval(out)
+        return out
 
 
-class TreeThread:
+########################################################################################################################
+#
+# The code here is the ultimate representation of thoughts and processes. A tree of messages is a ThreadsTree.
+#
+########################################################################################################################
+
+
+class ThreadsTree:
     """
     This is the tree representation of a thread, where each node is a Message object. Useful for regeneration and
     searching through a tree of conversations. This is a container providing all the necessary APIs.
@@ -355,13 +483,12 @@ class TreeThread:
     def __init__(
         self, *msgs: Union[List[Union[List, Message]], Message], id: str = None
     ):
-        system = ""
-        if (
-            len(msgs)
-            and isinstance(msgs[0], Message)
-            and msgs[0].role == Message.SYSTEM
-        ):
-            system = msgs[0].value
+        system = None
+        if len(msgs):
+            if isinstance(msgs[0], Message) and msgs[0].role == Message.SYSTEM:
+                system = msgs[0].value
+            elif isinstance(msgs[0], str):
+                system = msgs[0]
         if system:
             msgs = msgs[1:]
 
@@ -371,16 +498,12 @@ class TreeThread:
         self.messages_map = {}
         self.messages = {}
 
-        self.tree = nt.Tree(name=self.id)
+        self.tree = nt.Tree()
         if msgs:
             self._add_children_to_parent(self.tree, msgs)
 
     def __repr__(self) -> str:
-        if self.system and " <system>" not in self.tree.name:
-            self.tree.name += " <system>"
-        elif not self.system and self.tree.name.endswith(" <system>"):
-            self.tree.name = self.tree.name[:-9]
-        return self.tree.format()
+        return f"<ThreadsTree: {self.id} " + self.tree.format() + ">"
 
     def __getitem__(self, x) -> Message:
         try:
@@ -437,6 +560,8 @@ class TreeThread:
     def latest_node(self) -> nt.Node:
         done = False
         cntr = copy.deepcopy(self.msg_counter)
+        if not cntr:
+            return self.tree
         while not done:
             try:
                 return self.tree.find(data_id=self.messages_map[cntr - 1])
@@ -448,7 +573,41 @@ class TreeThread:
 
     @property
     def latest_message(self) -> Message:
-        return self.messages[self.latest_node.data_id]
+        ln = self.latest_node
+        if isinstance(ln, nt.Tree):
+            return None
+        return self.messages[ln.data_id]
+
+    @property
+    def degree_of_tree(self) -> int:
+        # The degree of a tree is the maximum degree of a node in the tree.
+        degree = len(self.tree.children)
+
+        def _update_degree(node, _):
+            nonlocal degree
+            degree = max(degree, len(node.children))
+
+        self.tree.visit(_update_degree)
+        return degree
+
+    @property
+    def size(self) -> int:
+        # Number of nodes in the tree.
+        return len(self.messages)
+
+    @property
+    def breadth(self) -> int:
+        # The number of leaves.
+        brt = 0
+
+        def _update_breadth(node, _):
+            nonlocal brt
+            if not node.children:
+                # A leaf, by definition, has degree zero
+                brt += 1
+
+        self.tree.visit(_update_breadth)
+        return brt
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -460,9 +619,9 @@ class TreeThread:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TreeThread":
+    def from_dict(cls, data: Dict[str, Any]) -> "ThreadsTree":
         tree = cls()
-        tree.id = data["id"]
+        tree.id = data.get("id", "tree_" + str(tu.get_snowflake()))
         tree.system = data["system"]
         tree.tree = nt.Tree.from_dict(data["tree"])
         messages = [Message.from_dict(x) for x in data["messages"]]
@@ -471,25 +630,24 @@ class TreeThread:
         tree.msg_counter = len(tree.messages) + 1
         return tree
 
-    def add(self, child: Message, to: Message = None) -> "TreeThread":
+    def add(self, child: Message, to: Message = "root") -> "ThreadsTree":
         if child.id in self.messages:
             raise ValueError(
                 f"Message with id '{child.id}' already exists. Cycle detected."
             )
         if to is None:
             # find the latest inserted message and just add this as a child
-            to = self.latest_message
-        to = self[to]
-        if to.id not in self.messages:
-            raise ValueError(f"Parent with id {to.id} not found. Insert parent first.")
+            node = self.latest_node
+        elif to == "root":
+            node = self.tree
+        else:
+            to = self[to]
+            node = self.tree.find(data_id=to.id)
 
-        self._add_children_to_parent(
-            self.tree.find(data_id=to.id),  # find the actual nutree.Node
-            [child],
-        )
+        self._add_children_to_parent(node, [child])
         return self
 
-    def delete(self, from_: Message) -> "TreeThread":
+    def delete(self, from_: Message) -> "ThreadsTree":
         from_ = self[from_]
         if from_.id not in self.messages:
             raise ValueError(
@@ -511,19 +669,73 @@ class TreeThread:
         from_node.remove(keep_children=False)
         return self
 
-    def undo(self) -> "TreeThread":
+    def undo(self) -> "ThreadsTree":
         return self.delete(self.latest_message)
+
+    def pick(self, to: Message = None, from_: Message = None) -> Thread:
+        """
+        Get a thread from the Tree srtucture by telling `to` and `from_` in the tree
+        """
+        thread = Thread(system(self.system))
+        to = self.latest_message if to is None else self[to]
+        if to is None:
+            return thread
+        to_node = self.tree.find(data_id=to.id)
+        if from_ is not None:
+            from_ = self[from_]
+            from_node = self.tree.find(data_id=from_.id)
+            if not from_node.is_ancestor_of(to_node):
+                raise ValueError(
+                    f"Message with id '{from_.id}' is not an ancestor of '{to.id}'. Cannot build a thread."
+                )
+            from_parents = set(x.data_id for x in from_node.get_parent_list())
+        else:
+            from_parents = set()
+        for p in to_node.get_parent_list():
+            if p.data_id in from_parents:
+                continue
+            thread.append(self.messages[p.data_id])
+        return thread
+
+    def step_stream(
+        self, api: ModelInterface, /, from_: Message
+    ) -> Generator[Message, None, None]:
+        latest_thread = self.pick()
+        if latest_thread.chats[-1].role == from_.role:
+            raise ValueError(
+                f"Cannot step towards same role '{from_.role}' to '{latest_thread.chats[-1].role}'"
+            )
+        latest_thread.append(from_)
+
+        for token in api.stream_chat(latest_thread):
+            yield token
+
+        if fnc:
+            yield function_call(fnc)
+            yield function_resp("... I have been generated ...")
+
+    def step(self, api: ModelInterface, /, from_: Message) -> Message:
+        out = ""
+        fnc = None
+        for token in self.step_stream(api, from_):
+            if isinstance(token, dict):
+                fnc = token
+            else:
+                out += token
 
     def regenerate_stream(
         self,
-        from_: Message,
-        api: object,
+        api: ModelInterface,
+        /,
+        from_: Message = None,
         prompt: str = None,
         dry: bool = False,
         **api_kwargs,
     ):
-        # validation on inputs for regeneration
-        from_ = self[from_]
+        if from_ is None:
+            from_ = self.latest_message
+        else:
+            from_ = self[from_]
 
         if from_.role == Message.HUMAN:
             # if we are regenerating for a human, then we need to add a prompt to the tree and then regenerate
@@ -564,8 +776,9 @@ class TreeThread:
 
     def regenerate(
         self,
-        from_: Message,
-        api: object,
+        api: ModelInterface,
+        /,
+        from_: Message = None,
         prompt: str = None,
         dry: bool = False,
         **api_kwargs,
@@ -573,8 +786,8 @@ class TreeThread:
         return "".join(
             list(
                 self.regenerate_stream(
-                    from_,
                     api,
+                    from_,
                     prompt=prompt,
                     dry=dry,
                     **api_kwargs,
@@ -582,8 +795,32 @@ class TreeThread:
             )
         )
 
+    class ROLLOUT:
+        Continue = "continue"
+        OneMoreRanker = "one_more_ranker"
+        StopRollout = "stop_rollout"
 
-# these are the classes that we use for tune datasets from r-stack
+    def rollout(
+        self,
+        /,
+        message_gen_fn: callable = None,
+        value_fn: callable = None,
+        from_: Message = None,
+        max_rollouts: int = 20,
+        depth: int = 5,
+        children: int = 5,
+        retry: int = 1,
+    ):
+        # perform a full on rollout of the tree and provide necesary callbacks. The underlying threads contain
+        # all the necessary information to perform the rollouts
+        raise NotImplementedError("Not implemented yet")
+
+
+########################################################################################################################
+#
+# The code in this section is copied from another repository which was originally used for research (r-stack)
+#
+########################################################################################################################
 
 
 class ThreadsList(list):
@@ -603,10 +840,6 @@ class ThreadsList(list):
 
     def __iter__(self) -> Generator[Thread, None, None]:
         for x in self.items:
-            yield x
-
-    def stream(self) -> Generator[Thread, None, None]:
-        for x in self:
             yield x
 
     def __getitem__(self, __index) -> List[Thread]:
@@ -631,7 +864,7 @@ class ThreadsList(list):
 
     # data manipulation
 
-    def append(self, __object: Any) -> None:
+    def append(self, __object: Thread) -> None:
         if not self.items:
             self.keys = __object.meta.keys()
         if self.keys != __object.meta.keys():
@@ -724,6 +957,8 @@ class ThreadsList(list):
             for sample in self.items:
                 if fmt == "sharegpt":
                     item, _ = sample.to_ft()
+                elif fmt == "full":
+                    item = sample.to_dict(full=True)
                 elif fmt is None:
                     item = sample.to_dict()
                 else:
@@ -752,11 +987,6 @@ class ThreadsList(list):
             _ds_list.append(sample)
             meta_list.append(meta)
         return dst.Dataset.from_list(_ds_list), meta_list
-
-    # properties
-
-    def can_train_koro_regression(self) -> bool:
-        return all(["koro.regression" in x.meta for x in self])
 
 
 class Dataset:

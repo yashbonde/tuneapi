@@ -37,3 +37,28 @@ class SFGen:
 
 
 get_snowflake = SFGen()
+
+
+def reservoir_sampling(stream, k):
+    """
+    Perform reservoir sampling on the given stream to select k items.
+
+    :param stream: An iterable representing the input stream.
+    :param k: The number of items to sample.
+    :return: A list containing k sampled items.
+    """
+
+    # Initialize an empty reservoir
+    reservoir = []
+
+    # Fill the reservoir with the first k elements from the stream
+    for i, item in enumerate(stream):
+        if i < k:
+            reservoir.append(item)
+        else:
+            # Randomly replace elements in the reservoir with decreasing probability
+            j = random.randint(0, i)
+            if j < k:
+                reservoir[j] = item
+
+    return reservoir
