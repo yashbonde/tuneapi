@@ -99,7 +99,7 @@ class TuneModel:
         chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
-        temperature: float = 1,
+        temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 30),
         **kwargs,
@@ -125,7 +125,7 @@ class TuneModel:
         chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
-        temperature: float = 1,
+        temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
         raw: bool = False,
@@ -176,14 +176,14 @@ class TuneModel:
             if line:
                 try:
                     x = json.loads(line.replace("data: ", ""))["choices"][0]["delta"]
-                    if "tool_calls" not in x:
-                        yield x["content"]
-                    else:
+                    if "tool_calls" in x:
                         y = x["tool_calls"][0]["function"]
                         if fn_call is None:
                             fn_call = {"name": y["name"], "arguments": y["arguments"]}
                         else:
                             fn_call["arguments"] += y["arguments"]
+                    elif "content" in x:
+                        yield x["content"]
                 except:
                     break
         if fn_call:

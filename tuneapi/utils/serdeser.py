@@ -28,8 +28,16 @@ def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:
     else:
         kwargs["indent"] = indent
     if fp:
-        with open(fp, "w") as f:
-            f.write(json.dumps(x, **kwargs))
+        if fp.endswith(".json"):
+            with open(fp, "w") as f:
+                f.write(json.dumps(x, **kwargs))
+        if fp.endswith(".jsonl"):
+            with open(fp, "w") as f:
+                for y in x:
+                    # firce tight to True for jsonl
+                    kwargs["separators"] = (",", ":")  # type: ignore
+                    kwargs["indent"] = None
+                    f.write(json.dumps(y, **kwargs) + "\n")
     else:
         return json.dumps(x, **kwargs)
 
@@ -104,3 +112,50 @@ def structpb_to_dict(struct: Struct, out: Dict = None) -> Dict:
         else:
             out[key] = value
     return out
+
+
+def to_s3(
+    key: str,
+    x: Any,
+    aws_region: str,
+    aws_access_key_id: str,
+    aws_secret_access_key: str,
+    aws_s3_bucket: str,
+):
+    import boto3
+
+    s3 = boto3.client(
+        "s3",
+        region_name=aws_region,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+    )
+    if isinstance(x, str):
+        if os.path.exists(x):
+            return s3.upload_file(x, aws_s3_bucket, key)
+        else:
+            x = x.encode("utf-8")
+    return s3.put_object(
+        Key=key,
+        Body=x,
+        Bucket=aws_s3_bucket,
+    )
+
+
+def from_s3(
+    key: str,
+    aws_region: str,
+    aws_access_key_id: str,
+    aws_secret_access_key: str,
+    aws_s3_bucket: str,
+):
+    import boto3
+
+    s3 = boto3.client(
+        "s3",
+        region_name=aws_region,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+    )
+    response = s3.get_object(Bucket=aws_s3_bucket, Key=key)
+    return response["Body"].read()

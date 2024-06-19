@@ -168,6 +168,11 @@ class Message:
         if x == "content":
             return self.value
         return getattr(self, x)
+    
+    def __getattr__(self, __name: str) -> Any:
+        if __name in self.metadata:
+            return self.metadata[__name]
+        raise AttributeError(f"Attribute {__name} not found")
 
     def to_dict(
         self,
@@ -431,10 +436,13 @@ class Thread:
 
     def pop(self, message: Message = None):
         if message:
-            for i, x in enumerate(self.chats):
-                if x.id == message.id:
-                    self.chats.pop(i)
-                    break
+            if isinstance(message, int):
+                self.chats.pop(message)
+            elif isinstance(message, Message):
+                for i, x in enumerate(self.chats):
+                    if x.id == message.id:
+                        self.chats.pop(i)
+                        break
         else:
             self.chats.pop()
         return self
@@ -630,6 +638,9 @@ class ThreadsTree:
         tree.msg_counter = len(tree.messages) + 1
         return tree
 
+    def copy(self) -> "ThreadsTree":
+        return ThreadsTree.from_dict(self.to_dict())
+
     def add(self, child: Message, to: Message = "root") -> "ThreadsTree":
         if child.id in self.messages:
             raise ValueError(
@@ -676,7 +687,10 @@ class ThreadsTree:
         """
         Get a thread from the Tree srtucture by telling `to` and `from_` in the tree
         """
-        thread = Thread(system(self.system))
+        if self.system:
+            thread = Thread(system(self.system))
+        else:
+            thread = Thread()
         to = self.latest_message if to is None else self[to]
         if to is None:
             return thread
@@ -708,7 +722,10 @@ class ThreadsTree:
         latest_thread.append(from_)
 
         for token in api.stream_chat(latest_thread):
-            yield token
+            if isinstance(token, dict):
+                fnc = token
+            else:
+                yield token
 
         if fnc:
             yield function_call(fnc)

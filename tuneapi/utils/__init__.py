@@ -58,6 +58,8 @@ from tuneapi.utils.serdeser import (
     to_b64,
     to_json,
     to_pickle,
+    to_s3,
+    from_s3,
 )
 from tuneapi.utils.subway import (
     get_session,

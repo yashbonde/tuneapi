@@ -125,6 +125,18 @@ class Test_ThreadsTree(TestCase):
         ttree = get_tree()
         self.assertRaises(ValueError, ttree.regenerate, None, "msg_010")
 
+    def test_11_property_latest_message(self):
+        ttree = get_tree()
+        self.assertEqual(ttree.latest_message.id, "msg_100")
+
+    def test_12_property_size(self):
+        ttree = get_tree()
+        self.assertEqual(ttree.size, 13)
+
+    def test_13_property_degree_of_tree(self):
+        ttree = get_tree()
+        self.assertEqual(ttree.degree_of_tree, 2)
+
 
 class Test_Thread(TestCase):
     def test_01_ser_deser(self):

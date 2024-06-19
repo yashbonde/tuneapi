@@ -177,6 +177,8 @@ class Openai:
             yield fn_call
         return
 
+    # def _process_chat_to_string_for_embedding(self, chat: tt.Thread):
+
     def embedding(
         self,
         chats: tt.Thread | List[str] | str,
@@ -184,26 +186,22 @@ class Openai:
         model: str = "text-embedding-3-small",
         token: Optional[str] = None,
         timeout=(5, 60),
+        raw: bool = False,
     ):
+        """If you pass a list then returned items are in the insertion order"""
         text = []
 
         headers = self._process_header(token)
         if isinstance(chats, tt.Thread):
-            headers, messages = self._process_input(chats, token)
+            _, messages = self._process_input(chats, token)
             for i, m in enumerate(messages):
                 x = f"<{m['role']}> : {m['content']}\n\n"
-                if not text:
-                    text.append(x)
-                    continue
-                if cum:
-                    # create a cumulative string from start till now
-                    x = ""
-                    for j in range(i + 1):
-                        x += f"<{messages[j]['role']}> : {messages[j]['content']}\n\n"
-                else:
-                    # attach to previous message
-                    text[-1] += x
                 text.append(x)
+
+            if cum:
+                text = ["".join(text)]
+        elif isinstance(chats, tt.Message):
+            text = [chats.value]
         elif isinstance(chats, list) and len(chats) and isinstance(chats[0], str):
             # this is an exception
             text = chats
@@ -227,6 +225,10 @@ class Openai:
         except Exception as e:
             print(r.text)
             raise e
+
+        if raw:
+            return r.json()
+
         emb = [
             x["embedding"] for x in sorted(r.json()["data"], key=lambda x: x["index"])
         ]

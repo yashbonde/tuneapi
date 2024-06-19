@@ -92,12 +92,19 @@ class ThreadsAPI:
         # GET /threads/{thread_id}
         fn = self.sub.threads.u(thread_id)
         data = fn()
-        data.pop("object")
-        meta = data.pop("metadata", {})
+        meta = data.get("metadata", {})
+        if meta == None:
+            meta = {}
+        extra = {}
         for k, v in meta.items():
             if k not in data:
-                data[k] = v
-        thread = tt.Thread(**data)
+                extra[k] = v
+        thread = tt.Thread(
+            id=data["id"],
+            title=data["title"],
+            evals=meta.get("evals", {}),
+            **extra,
+        )
 
         if messages:
             # GET /threads/{thread_id}/messages

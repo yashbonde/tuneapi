@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from google.protobuf.timestamp_pb2 import Timestamp as Timestamp_pb
 
 from tuneapi.utils.logger import logger
@@ -20,6 +20,7 @@ class SimplerTimes:
     """
 
     tz = timezone.utc
+    IST = timezone(timedelta(hours=5, minutes=30))
 
     def get_now_datetime() -> datetime:  # type: ignore
         """Get the current datetime in UTC timezone"""
@@ -41,12 +42,16 @@ class SimplerTimes:
         """Get the current datetime in UTC timezone as a string"""
         return SimplerTimes.get_now_datetime().strftime("%Y-%m-%d %H:%M:%S.%f")
 
-    def get_now_human(date: bool = True) -> str:  # type: ignore
-        """Get the current datetime in UTC timezone as a human readable string"""
+    def get_now_human(date: bool = True, tz=None) -> str:
+        """Get the current datetime in timezone as a human readable string"""
         fmt_str = "%I:%M %p"
         if date:
             fmt_str = "%A %d %B, %Y at " + fmt_str
-        return SimplerTimes.get_now_datetime().strftime(fmt_str)
+        dt = SimplerTimes.get_now_datetime()
+        if tz:
+            fmt_str += " %Z"
+            dt = dt.astimezone(tz)
+        return dt.strftime(fmt_str)
 
     def get_now_pb() -> Timestamp_pb:
         ts = Timestamp_pb()
