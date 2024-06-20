@@ -218,7 +218,7 @@ class Anthropic:
         fn_call = None
         for line in r.iter_lines():
             line = line.decode().strip()
-            if not "data:" in line or not line:
+            if not line or not "data:" in line:
                 continue
 
             try:

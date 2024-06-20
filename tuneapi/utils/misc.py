@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from google.protobuf.timestamp_pb2 import Timestamp as Timestamp_pb
 
 from tuneapi.utils.logger import logger
+from tuneapi.utils.serdeser import to_json
 
 
 class SimplerTimes:
@@ -114,3 +115,19 @@ def decrypt(token: str, password: str, salt: str):
     key = base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
     f = Fernet(key)
     return f.decrypt(token).decode("utf-8")
+
+
+def generator_to_api_events(model, generator):
+    for token in generator:
+        temp = {
+            "model": None,
+            "choices": [
+                {"index": 0, "delta": {"content": None}, "finish_reason": None}
+            ],
+        }
+        if model and type(model) == str:
+            temp["model"] = model
+        temp["choices"][0]["delta"]["content"] = token
+        yield b"data: " + to_json(temp, tight=True).encode() + b"\r\n"
+        yield b"\r\n"
+    yield b"done: [DONE]"

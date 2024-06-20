@@ -113,9 +113,10 @@ class Message:
         "gpt": GPT,
         "assistant": GPT,
         "machine": GPT,
-        # functions
+        # function calls
         "function_call": FUNCTION_CALL,
         "function-call": FUNCTION_CALL,
+        # function response
         "function_resp": FUNCTION_RESP,
         "function-resp": FUNCTION_RESP,
     }
@@ -139,6 +140,13 @@ class Message:
         self.id = id or "msg_" + str(tu.get_snowflake())
         self.metadata = kwargs
         self.fn_pairs = fn_pairs
+
+        # validations
+        if self.role == self.FUNCTION_CALL:
+            assert "name" in self.value, "key 'name' not found in function call"
+            assert (
+                "arguments" in self.value
+            ), "key 'arguments' not found in function call"
 
     def __str__(self) -> str:
         try:
@@ -168,7 +176,7 @@ class Message:
         if x == "content":
             return self.value
         return getattr(self, x)
-    
+
     def __getattr__(self, __name: str) -> Any:
         if __name in self.metadata:
             return self.metadata[__name]

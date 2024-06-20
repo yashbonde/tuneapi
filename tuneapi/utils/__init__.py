@@ -34,6 +34,7 @@ from tuneapi.utils.misc import (
     safe_exit,
     SimplerTimes,
     unsafe_exit,
+    generator_to_api_events,
 )
 from tuneapi.utils.networking import (
     DoNotRetryException,
