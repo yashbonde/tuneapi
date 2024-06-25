@@ -97,6 +97,11 @@ async def chat_completions(request: Request, data: ChatCompletionRequest):
         return response
 
 
+@app.post("/")
+async def healthz():
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     import uvicorn
 

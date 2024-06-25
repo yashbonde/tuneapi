@@ -10,6 +10,7 @@ from tuneapi.apis.model_gemini import Gemini
 
 # projectX APIs
 from tuneapi.apis.threads import ThreadsAPI
+from tuneapi.apis.assistants import AssistantsAPI
 
 # other imports
 import os

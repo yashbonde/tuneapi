@@ -22,6 +22,13 @@ class TuneModel:
         self.tune_api_token = tu.ENV.TUNEAPI_TOKEN("")
         self.tune_org_id = org_id or tu.ENV.TUNEORG_ID("")
 
+    def __repr__(self) -> str:
+        out = f"<TuneModel: {self.tune_model_id}"
+        if self.tune_org_id:
+            out += f" | {self.tune_org_id}"
+        out += ">"
+        return out
+
     def set_api_token(self, token: str) -> None:
         self.tune_api_token = token
 
@@ -128,6 +135,7 @@ class TuneModel:
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
+        stop_sequence: Optional[str] = None,
         raw: bool = False,
         debug: bool = False,
     ):
@@ -144,6 +152,8 @@ class TuneModel:
             "stream": True,
             "max_tokens": max_tokens,
         }
+        if stop_sequence:
+            data["stop_sequence"] = stop_sequence
         if isinstance(chats, tt.Thread):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools

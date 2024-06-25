@@ -83,6 +83,8 @@ class Tool:
 
     @classmethod
     def from_dict(cls, x):
+        if "type" in x and x["type"] == "function":
+            return cls.from_dict(x["function"])
         parameters = []
         for k, v in x["parameters"].get("properties", {}).items():
             parameters.append(cls.Prop(name=k, **v))
@@ -402,7 +404,11 @@ class Thread:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Thread":
-        chats = data.get("chats", []) or data.get("conversations", [])
+        chats = (
+            data.get("chats", [])
+            or data.get("conversations", [])
+            or data.get("messages", [])
+        )
         if not chats:
             raise ValueError("No chats found")
         return cls(

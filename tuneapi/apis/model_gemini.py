@@ -233,13 +233,14 @@ class Gemini:
                 ][0]
                 if "text" in part_data:
                     if raw:
-                        yield tu.to_json(
+                        yield b"data: " + tu.to_json(
                             {
                                 "object": "gemini_text",
                                 "choices": [{"delta": {"content": part_data["text"]}}],
                             },
                             tight=True,
                         ).encode()
+                        yield b""
                     else:
                         yield part_data["text"]
                 elif "functionCall" in part_data:

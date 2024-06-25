@@ -17,7 +17,7 @@ def get_sub(
     sess.headers.update({"x-tune-key": tune_api_key})
     if tune_org_id:
         sess.headers.update({"X-Organization-Id": tune_org_id})
-    return tu.Subway("https://studio.rc.tune.app/v1/", sess)
+    return tu.Subway("https://studio.tune.app/v1/", sess)
 
 
 class ThreadsAPI:
