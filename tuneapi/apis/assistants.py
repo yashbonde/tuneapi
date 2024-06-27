@@ -36,7 +36,7 @@ class AssistantsAPI:
         tune_api_key: str = None,
         base_url: str = "https://studio.tune.app/v1/assistants",
     ):
-        self.tune_org_id = tune_org_id or tu.ENV.TUNE_ORG_ID("")
+        self.tune_org_id = tune_org_id or tu.ENV.TUNE_ORG_ID()
         self.tune_api_key = tune_api_key or tu.ENV.TUNE_API_KEY()
         if not tune_api_key:
             raise ValueError("Either pass tune_api_key or set Env var TUNE_API_KEY")

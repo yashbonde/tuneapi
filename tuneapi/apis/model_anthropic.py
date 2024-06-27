@@ -11,10 +11,10 @@ from tuneapi.types import Thread, human, Message
 class Anthropic:
     def __init__(
         self,
-        model: Optional[str] = "claude-3-haiku-20240307",
+        id: Optional[str] = "claude-3-haiku-20240307",
         base_url: str = "https://api.anthropic.com/v1/messages",
     ):
-        self.anthropic_model = model
+        self.anthropic_model = id
         self.base_url = base_url
         self.anthropic_api_token = tu.ENV.ANTHROPIC_TOKEN("")
 

@@ -9,15 +9,16 @@ from tuneapi import types as tt
 
 @cache
 def get_sub(
-    tune_org_id: Optional[str] = None,
-    tune_api_key: Optional[str] = None,
+    base_url,
+    tune_org_id: str,
+    tune_api_key: str,
 ) -> tu.Subway:
 
     sess = tu.Subway._get_session()
     sess.headers.update({"x-tune-key": tune_api_key})
     if tune_org_id:
         sess.headers.update({"X-Organization-Id": tune_org_id})
-    return tu.Subway("https://studio.tune.app/v1/", sess)
+    return tu.Subway(base_url, sess)
 
 
 class ThreadsAPI:
@@ -25,12 +26,13 @@ class ThreadsAPI:
         self,
         tune_org_id: Optional[str] = None,
         tune_api_key: Optional[str] = None,
+        base_url: str = "https://studio.tune.app/v1/",
     ):
-        self.tune_org_id = tune_org_id or tu.ENV.TUNE_ORG_ID("")
+        self.tune_org_id = tune_org_id or tu.ENV.TUNE_ORG_ID()
         self.tune_api_key = tune_api_key or tu.ENV.TUNE_API_KEY()
         if not tune_api_key:
             raise ValueError("Either pass tune_api_key or set Env var TUNE_API_KEY")
-        self.sub = get_sub(self.tune_org_id, self.tune_api_key)
+        self.sub = get_sub(base_url, self.tune_org_id, self.tune_api_key)
 
     def set_token_and_org_id(
         self,
@@ -49,39 +51,23 @@ class ThreadsAPI:
         if not thread.title:
             thread.title = "thread_" + tu.get_snowflake()
 
-        meta = {
-            "meta": tu.to_json(
-                {"thread_meta": thread.meta, "evals": thread.evals}, tight=True
-            )
-        }
+        m = {}
+        if thread.meta:
+            m["thread_meta"] = thread.meta
+        if thread.evals:
+            m["evals"] = thread.evals
+        meta = {"meta": tu.to_json(m, tight=True)} if m else {}
 
-        if thread.id:
-            # validate this thread exists
-            self.get_thread(thread.id)
-            tu.logger.warning(
-                "Can only update title and metadata, messages will be ignored"
-            )
-            fn = self.sub.threads.u(thread.id)
-            out = fn(
-                "post",
-                json={
-                    "title": thread.title,
-                    "metadata": meta,
-                },
-            )
-        else:
-            tu.logger.warning("Creating new thread")
-            out = self.sub.threads(
-                "post",
-                json={
-                    "title": thread.title,
-                    "metadata": meta,
-                    "messages": [
-                        m.to_dict(format="api", meta=False) for m in thread.chats
-                    ],
-                },
-            )
-            thread.id = out["id"]
+        tu.logger.info("Creating new thread")
+        out = self.sub.threads(
+            "post",
+            json={
+                "title": thread.title,
+                "metadata": meta,
+                "messages": [m.to_dict(format="api", meta=False) for m in thread.chats],
+            },
+        )
+        thread.id = out["id"]
         return thread
 
     def get_thread(

@@ -154,4 +154,5 @@ logs.py
 chunker/
 examples/
 cookbooks/
+datasets/
 

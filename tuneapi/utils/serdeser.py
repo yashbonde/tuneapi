@@ -8,6 +8,8 @@ from typing import Any, Dict
 from base64 import b64encode, b64decode
 from google.protobuf.struct_pb2 import Struct
 
+from tuneapi.utils.mime import get_mime_type
+
 
 def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:
     """
@@ -121,6 +123,7 @@ def to_s3(
     aws_access_key_id: str,
     aws_secret_access_key: str,
     aws_s3_bucket: str,
+    content_type: str = None,
 ):
     import boto3
 
@@ -132,13 +135,16 @@ def to_s3(
     )
     if isinstance(x, str):
         if os.path.exists(x):
-            return s3.upload_file(x, aws_s3_bucket, key)
+            if not content_type:
+                content_type = get_mime_type(x)
+            return s3.upload_file(x, aws_s3_bucket, key, ContentType=content_type)
         else:
             x = x.encode("utf-8")
     return s3.put_object(
         Key=key,
         Body=x,
         Bucket=aws_s3_bucket,
+        ContentType=content_type or "application/octet-stream",
     )
 
 
