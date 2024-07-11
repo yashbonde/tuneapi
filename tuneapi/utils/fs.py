@@ -33,7 +33,8 @@ def get_files_in_folder(
             if _all:
                 for f in files:
                     _fp = joinp(root, f)
-                    if not ignore_pat.search(_fp).group():
+                    _ig_pat = ignore_pat.search(_fp)
+                    if not _ig_pat or not _ig_pat.group():
                         all_paths.append(_fp)
                 continue
 
@@ -42,21 +43,24 @@ def get_files_in_folder(
                     print(e)
                     if f.endswith(e):
                         _fp = joinp(root, f)
-                        if not ignore_pat.search(_fp).group():
+                        _ig_pat = ignore_pat.search(_fp)
+                        if not _ig_pat or not _ig_pat.group():
                             all_paths.append(_fp)
 
     else:
         for f in os.listdir(folder_abs):
             if _all:
                 _fp = joinp(folder_abs, f)
-                if not ignore_pat.search(_fp).group():
+                _ig_pat = ignore_pat.search(_fp)
+                if not _ig_pat or not _ig_pat.group():
                     all_paths.append(_fp)
                 continue
 
             for e in ext:
                 if f.endswith(e):
                     _fp = joinp(folder_abs, f)
-                    if not ignore_pat.search(_fp).group():
+                    _ig_pat = ignore_pat.search(_fp)
+                    if not _ig_pat or not _ig_pat.group():
                         all_paths.append(_fp)
 
     return all_paths

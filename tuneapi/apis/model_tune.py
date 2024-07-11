@@ -154,7 +154,7 @@ class TuneModel:
         }
         if stop_sequence:
             data["stop_sequence"] = stop_sequence
-        if isinstance(chats, tt.Thread):
+        if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
             ]
@@ -185,15 +185,20 @@ class TuneModel:
             line = line.decode().strip()
             if line:
                 try:
-                    x = json.loads(line.replace("data: ", ""))["choices"][0]["delta"]
-                    if "tool_calls" in x:
-                        y = x["tool_calls"][0]["function"]
+                    delta = json.loads(line.replace("data: ", ""))["choices"][0][
+                        "delta"
+                    ]
+                    if "tool_calls" in delta:
+                        y = delta["tool_calls"][0]["function"]
                         if fn_call is None:
-                            fn_call = {"name": y["name"], "arguments": y["arguments"]}
+                            fn_call = {
+                                "name": y["name"],
+                                "arguments": y.get("arguments", ""),
+                            }
                         else:
                             fn_call["arguments"] += y["arguments"]
-                    elif "content" in x:
-                        yield x["content"]
+                    elif "content" in delta:
+                        yield delta["content"]
                 except:
                     break
         if fn_call:
