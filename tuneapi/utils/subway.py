@@ -152,6 +152,7 @@ class Subway:
 
         if SimplerTimes.get_now_i64() - self._last_update > 120:
             self._renew_session()
+        print(f"{url=}, {items=}")
         r = fn(url, **items, **kwargs)
         if 399 < r.status_code < 500:
             raise SubwayClientError(r.content.decode(), code=r.status_code)

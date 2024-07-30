@@ -56,11 +56,12 @@ def from_json(x: str = "") -> Dict[str, Any]:
     """
     if os.path.exists(x):
         if x.endswith(".json"):
-            with open(x, "r") as f:
-                return json.load(f)
+            with open(x, "rb") as f:
+                return json.loads(f.read().decode("utf-8", "ignore"))
         elif x.endswith(".jsonl"):
-            with open(x, "r") as f:
-                return [json.loads(line) for line in f]
+            with open(x, "rb") as f:
+                for line in f.read().decode("utf-8", "ignore").splitlines():
+                    return json.loads(line)
     else:
         return json.loads(x)
 

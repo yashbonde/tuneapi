@@ -15,8 +15,8 @@ import tuneapi.utils as tu
 
 ########################################################################################################################
 #
-# The code in this section contains the primitive of this new chat API. The `Tool` class defines tools that the model
-# can predict. The `Message` class defines the container for storing the chat messages.
+# The code in this section contains the primitive of this new chat API. The ``Tool`` class defines tools that the model
+# can predict. The ``Message`` class defines the container for storing the chat messages.
 #
 ########################################################################################################################
 
@@ -133,7 +133,7 @@ class Message:
         **kwargs,
     ):
         if role not in self.KNOWN_ROLES:
-            raise ValueError(f"Unknown role: {role}. Update dictionary `KNOWN_ROLES`")
+            raise ValueError(f"Unknown role: {role}. Update dictionary ``KNOWN_ROLES``")
         if value is None:
             raise ValueError("value cannot be None")
 
@@ -188,12 +188,15 @@ class Message:
         self,
         format: Optional[str] = None,
         meta: bool = False,
-    ):  #  ft: bool = False
+    ):
         """
-        if format == `ft` then export to following format: `{"from": "system/human/gpt", "value": "..."}`
-        elif format == `api` then `{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}`
-        elif format == `full` then `{"id": 1234421123, "role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}`
-        else export to following format: `{"role": "system/user/assistant", "content": "..."}`
+        if format == ``ft`` then export to following format: ``{"from": "system/human/gpt", "value": "..."}``
+
+        elif format == ``api`` then ``{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``
+
+        elif format == ``full`` then ``{"id": 1234421123, "role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``
+
+        else export to following format: ``{"role": "system/user/assistant", "content": "..."}``
         """
         role = self.role
 
@@ -699,7 +702,7 @@ class ThreadsTree:
 
     def pick(self, to: Message = None, from_: Message = None) -> Thread:
         """
-        Get a thread from the Tree srtucture by telling `to` and `from_` in the tree
+        Get a thread from the Tree srtucture by telling ``to`` and ``from_`` in the tree
         """
         if self.system:
             thread = Thread(system(self.system))
@@ -772,7 +775,7 @@ class ThreadsTree:
             # if we are regenerating for a human, then we need to add a prompt to the tree and then regenerate
             if not prompt:
                 raise ValueError(
-                    f"Regenerating for role 'human' but no `prompt` provided. pass `prompt`"
+                    f"Regenerating for role 'human' but no ``prompt`` provided. pass ``prompt``"
                 )
             if type(prompt) == str:
                 prompt = human(prompt)
@@ -786,7 +789,7 @@ class ThreadsTree:
             # to be a human
             if prompt:
                 raise ValueError(
-                    f"Regenerating for role 'gpt' but `prompt` provided. remove `prompt`"
+                    f"Regenerating for role 'gpt' but ``prompt`` provided. remove ``prompt``"
                 )
             thread = Thread()
             for x in self.tree.find(data_id=from_.id).get_parent_list():
@@ -939,7 +942,7 @@ class ThreadsList(list):
         try:
             import numpy as np
         except ImportError:
-            raise ImportError("Install numpy to use `create_te_split` method")
+            raise ImportError("Install numpy to use ``create_te_split`` method")
 
         train_ds = ThreadsList()
         eval_ds = ThreadsList()

@@ -155,4 +155,8 @@ chunker/
 examples/
 cookbooks/
 datasets/
-
+docs/_static
+docs/_build
+docs/_templates
+docs/source
+test.py
