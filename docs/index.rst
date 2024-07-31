@@ -15,4 +15,5 @@ TuneAPI
    source/tuneapi.apis
    source/tuneapi.types
    source/tuneapi.utils
+   changelog
 

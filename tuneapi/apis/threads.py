@@ -18,7 +18,6 @@ def get_sub(
     sess.headers.update({"x-tune-key": tune_api_key})
     if tune_org_id:
         sess.headers.update({"X-Organization-Id": tune_org_id})
-    print("::::::", sess.headers)
     return tu.Subway(base_url, sess)
 
 
@@ -65,6 +64,7 @@ class ThreadsAPI:
             body["metadata"] = {"meta": tu.to_json(m, tight=True)}
 
         tu.logger.info("Creating new thread")
+        print(tu.to_json(body))
         out = self.sub.threads("post", json=body)
         thread.id = out["id"]
         return thread

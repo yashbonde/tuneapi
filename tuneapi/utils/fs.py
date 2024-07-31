@@ -40,7 +40,6 @@ def get_files_in_folder(
 
             for f in files:
                 for e in ext:
-                    print(e)
                     if f.endswith(e):
                         _fp = joinp(root, f)
                         _ig_pat = ignore_pat.search(_fp)

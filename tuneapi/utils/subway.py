@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, Tuple
 
 from tuneapi.utils.logger import logger
 from tuneapi.utils.misc import SimplerTimes
+from tuneapi.utils.serdeser import to_json
 
 
 class SubwayClientError(Exception):
@@ -85,7 +86,7 @@ class Subway:
     def _renew_session(self):
         """Renew the session"""
         _session = Session()
-        if "token" in self._session.headers:
+        if self._session.headers:
             _session.headers.update(**self._session.headers)
         self._session = _session
 
@@ -152,7 +153,6 @@ class Subway:
 
         if SimplerTimes.get_now_i64() - self._last_update > 120:
             self._renew_session()
-        print(f"{url=}, {items=}")
         r = fn(url, **items, **kwargs)
         if 399 < r.status_code < 500:
             raise SubwayClientError(r.content.decode(), code=r.status_code)

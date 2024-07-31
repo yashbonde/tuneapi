@@ -7,13 +7,15 @@ import os, sys
 
 sys.path.insert(0, os.path.abspath("../"))
 
+from tuneapi import __version__
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "tuneapi"
 copyright = "2024, Frello Technologies"
 author = "Frello Technologies"
-release = "0.4.11"
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

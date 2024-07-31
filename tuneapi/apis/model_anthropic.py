@@ -1,5 +1,6 @@
 # Copyright © 2024- Frello Technology Private Limited
 
+import re
 import json
 import requests
 from typing import Optional, Dict, Any, Tuple, List
@@ -71,60 +72,55 @@ class Anthropic:
         prev_tool_id = tu.get_random_string(5)
         for m in thread.chats[int(system != "") :]:
             if m.role == Message.HUMAN:
-                claude_messages.append(
-                    {
-                        "role": "user",
-                        "content": [
+                msg = {
+                    "role": "user",
+                    "content": [{"type": "text", "text": m.value.strip()}],
+                }
+                if m.images:
+                    for i in m.images:
+                        msg["content"].append(
                             {
-                                "type": "text",
-                                "text": m.value.strip(),
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": i,
+                                },
                             }
-                        ],
-                    }
-                )
+                        )
             elif m.role == Message.GPT:
-                claude_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": m.value.strip(),
-                            }
-                        ],
-                    }
-                )
+                msg = {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": m.value.strip()}],
+                }
             elif m.role == Message.FUNCTION_CALL:
                 _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
-                claude_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "id": prev_tool_id,
-                                "name": _m["name"],
-                                "input": _m["arguments"],
-                            }
-                        ],
-                    }
-                )
+                msg = {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": prev_tool_id,
+                            "name": _m["name"],
+                            "input": _m["arguments"],
+                        }
+                    ],
+                }
             elif m.role == Message.FUNCTION_RESP:
                 _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
-                claude_messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": prev_tool_id,
-                                "content": tu.to_json(_m, tight=True),
-                            }
-                        ],
-                    }
-                )
+                msg = {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": prev_tool_id,
+                            "content": tu.to_json(_m, tight=True),
+                        }
+                    ],
+                }
             else:
                 raise Exception(f"Unknown role: {m.role}")
+            claude_messages.append(msg)
 
         headers = {
             "x-api-key": token,
@@ -255,3 +251,15 @@ class Anthropic:
             except:
                 break
         return
+
+
+# helper methods
+
+
+def get_section(tag: str, out: str) -> Optional[str]:
+    pattern = re.compile("<" + tag + ">(.*?)</" + tag + ">", re.DOTALL)
+    match = pattern.search(out)
+    if match:
+        content = match.group(1)
+        return content
+    return None

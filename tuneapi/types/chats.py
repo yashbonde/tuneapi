@@ -5,6 +5,7 @@ import os
 import json
 import copy
 import random
+from PIL.Image import Image
 from functools import partial
 from collections.abc import Iterable
 from typing import Dict, List, Any, Tuple, Optional, Generator, Union
@@ -128,8 +129,8 @@ class Message:
         self,
         value: str | float | List[Dict[str, Any]],
         role: str,
+        images: List[str | Image] = [],
         id: str = None,
-        fn_pairs: Optional[Tuple["Message", "Message"]] = None,
         **kwargs,
     ):
         if role not in self.KNOWN_ROLES:
@@ -141,7 +142,12 @@ class Message:
         self.value = value
         self.id = id or "msg_" + str(tu.get_snowflake())
         self.metadata = kwargs
-        self.fn_pairs = fn_pairs
+        self.images = images
+        for i, img in enumerate(self.images):
+            if isinstance(img, Image):
+                buf = io.BytesIO()
+                img.save(buf, "png")
+                self.images[i] = tu.to_b64(buf.getvalue())
 
         # validations
         if self.role == self.FUNCTION_CALL:
@@ -164,14 +170,7 @@ class Message:
         return Message(self.value + other, self.role)
 
     def __repr__(self) -> str:
-        out = ""
-        if self.fn_pairs:
-            for fc, fr in self.fn_pairs:
-                out += f"[[FC] {fc} => [FR] {fr}]"
-        if out:
-            out += " " + str(self.value)
-        else:
-            out = str(self.value)
+        out = str(self.value)
         return out
 
     def __getitem__(self, x):
@@ -190,13 +189,11 @@ class Message:
         meta: bool = False,
     ):
         """
-        if format == ``ft`` then export to following format: ``{"from": "system/human/gpt", "value": "..."}``
-
-        elif format == ``api`` then ``{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``
-
-        elif format == ``full`` then ``{"id": 1234421123, "role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``
-
-        else export to following format: ``{"role": "system/user/assistant", "content": "..."}``
+        Serialise the Message into a dictionary of different formats:
+            - format == ``ft`` then export to following format: ``{"from": "system/human/gpt", "value": "..."}``
+            - format == ``api`` then ``{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``. This is used with TuneAPI
+            - format == ``full`` then ``{"id": 1234421123, "role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``
+            - default: ``{"role": "system/user/assistant", "content": "..."}``
         """
         role = self.role
 
@@ -219,7 +216,7 @@ class Message:
         if ft:
             chat_message["value"] = self.value
         elif api:
-            chat_message["content"] = [{"type": "text", "text": {"value": self.value}}]
+            chat_message["content"] = [{"type": "text", "text": self.value}]
         else:
             chat_message["content"] = self.value
 
