@@ -2,6 +2,11 @@
 
 
 class Evals:
+    """
+    A simple class containing different evaluation metrics. Each function is self explanatory and returns a JSON logic
+    object.
+    """
+
     # small things like unit tests
     def exactly(x):
         return {"==": [{"var": "response"}, x]}

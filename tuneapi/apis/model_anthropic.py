@@ -1,3 +1,7 @@
+"""
+Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude series of LLMs
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 
 import re
@@ -23,6 +27,9 @@ class Anthropic:
         self.anthropic_api_token = token
 
     def tool_to_claude_xml(self, tool):
+        """
+        Deprecated: was written when function calling did not exist in Anthropic API.
+        """
         tool_signature = ""
         if len(tool["parameters"]) > 0:
             for name, p in tool["parameters"]["properties"].items():

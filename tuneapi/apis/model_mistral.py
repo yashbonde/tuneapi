@@ -1,3 +1,7 @@
+"""
+Connect to the `Mistral API <https://console.mistral.ai/>`_ and use their LLMs.
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 
 import json

@@ -830,4 +830,5 @@ MIMETYPES = {
 
 @lru_cache()
 def get_mime_type(fp: str, defualt="application/octet-stream"):
+    """Get mime type from file path based on extension"""
     return MIMETYPES.get(os.path.splitext(fp)[1].lower(), defualt)

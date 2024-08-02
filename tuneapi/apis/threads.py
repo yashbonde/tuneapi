@@ -1,3 +1,8 @@
+"""
+Use the `Threads API <https://studio.tune.app/docs/concepts/threads>`_ for managing threads and messages on the Tune AI
+platform.
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 
 from functools import cache

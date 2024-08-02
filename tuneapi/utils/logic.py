@@ -1,3 +1,7 @@
+"""
+JSON Logic used from https://github.com/nadirizr/json-logic-py (MIT License)
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 # REMEMBER: nothing from outside tune should be imported in utils
 #

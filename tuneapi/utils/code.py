@@ -112,7 +112,7 @@ def pyannotation_to_json_schema(
         allow_any (bool): Whether to allow the `Any` type.
         allow_exc (bool): Whether to allow the `Exception` type.
         allow_none (bool): Whether to allow the `None` type.
-        trace (bool, optional): Adds verbosity the schema generation also set FURY_LOG_LEVEL='debug'. Defaults to False.
+        trace (bool, optional): Adds verbosity the schema generation. Defaults to False.
 
     Returns:
         Var: The converted annotation.

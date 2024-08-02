@@ -26,6 +26,9 @@ def get_logger(name: str = "tuneapi") -> logging.Logger:
 
 
 logger = get_logger()
+"""
+Logger provided with the package, try to use this logger for all logging purposes
+"""
 
 
 @contextmanager

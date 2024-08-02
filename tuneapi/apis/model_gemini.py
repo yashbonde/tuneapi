@@ -1,3 +1,7 @@
+"""
+Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.google.dev>`_.
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 # https://ai.google.dev/gemini-api/docs/function-calling
 

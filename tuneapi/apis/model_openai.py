@@ -1,3 +1,7 @@
+"""
+Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs.
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 
 import json

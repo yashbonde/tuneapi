@@ -1,3 +1,7 @@
+"""
+Connect to the `Groq API <https://console.groq.com/>`_ to experience the speed of their LPUs.
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 
 import json

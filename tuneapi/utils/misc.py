@@ -118,6 +118,7 @@ def decrypt(token: str, password: str, salt: str):
 
 
 def generator_to_api_events(model, generator):
+    """Takes in a token generator and creates OpenAI compatible event stream"""
     for token in generator:
         temp = {
             "model": None,

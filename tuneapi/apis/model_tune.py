@@ -1,3 +1,7 @@
+"""
+Connect to the `TuneAI Proxy API <https://studio.tune.app/>`_ and use our standard endpoint for AI.
+"""
+
 # Copyright © 2024- Frello Technology Private Limited
 
 import json

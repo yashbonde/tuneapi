@@ -1,3 +1,13 @@
+"""
+This file contains all the datatypes relevant for a chat conversation. In general this is the nomenclature that we follow:
+    * Message: a unit of information produced by a ``role``
+    * Thread: a group of messages is called a thread. There can be many 2 types of threads, linear and tree based.
+    * ThreadsList: a group of linear threads is called a threads list.
+    * Dataset: a container for grouping threads lists is called a dataset
+
+Almost all the classes contain ``to_dict`` and ``from_dict`` for serialisation and deserialisation.
+"""
+
 # Copyright © 2023- Frello Technology Private Limited
 
 import io
@@ -23,8 +33,13 @@ import tuneapi.utils as tu
 
 
 class Tool:
+    """A tool is a container for telling the LLM what it can do. This is a standard definition."""
 
     class Prop:
+        """
+        An individual property is called a prop.
+        """
+
         def __init__(
             self,
             name: str,
@@ -97,6 +112,16 @@ class Tool:
 
 
 class Message:
+    """
+    A message is the unit element of information in a thread. You should avoid using directly and use the convinience
+    aliases ``tuneapi.types.chat. human/assistant/system/...``.
+
+    Args:
+        - value: this is generally a string or a list of dictionary objects for more advanced use cases
+        - role: the role who produced this information
+        - images: a list of PIL images or base64 strings
+    """
+
     # names that are our standards roles
     SYSTEM = "system"
     HUMAN = "human"
@@ -123,11 +148,12 @@ class Message:
         "function_resp": FUNCTION_RESP,
         "function-resp": FUNCTION_RESP,
     }
+    """A map that contains the popularly known mappings to make life simpler"""
 
     # start initialization here
     def __init__(
         self,
-        value: str | float | List[Dict[str, Any]],
+        value: str | List[Dict[str, Any]],
         role: str,
         images: List[str | Image] = [],
         id: str = None,
@@ -230,20 +256,31 @@ class Message:
 
     @classmethod
     def from_dict(cls, data):
+        """Deserialise and construct a message from a dictionary"""
         return cls(
             value=data.get("value") or data.get("content"),
             role=data.get("from") or data.get("role"),
-            id=data.get("id"),
+            id=data.get("id", ""),
+            images=data.get("images", []),
             **data.get("metadata", {}),
         )  # type: ignore
 
 
 ### Aliases
 human = partial(Message, role=Message.HUMAN)
+"""Convinience for creating a human message"""
+
 system = partial(Message, role=Message.SYSTEM)
+"""Convinience for creating a system message"""
+
 assistant = partial(Message, role=Message.GPT)
+"""Convinience for creating an assistant message"""
+
 function_call = partial(Message, role=Message.FUNCTION_CALL)
+"""Convinience for creating a function call message"""
+
 function_resp = partial(Message, role=Message.FUNCTION_RESP)
+"""Convinience for creating a function response message"""
 
 
 ########################################################################################################################
@@ -255,6 +292,8 @@ function_resp = partial(Message, role=Message.FUNCTION_RESP)
 
 
 class ModelInterface:
+    """This is the generic interface implemented by all the model APIs"""
+
     def set_api_token(self, token: str) -> None:
         """This are used to set the API token for the model"""
 
@@ -296,11 +335,12 @@ class ModelInterface:
 
 class Thread:
     """
-    If the last Message is a "value".
+    This is a container for a list of chat messages. This follows a similar interface to a list in python. See the methods
+    below for more information.
 
     Args:
-        chats (List[Message]): List of chat messages
-        jl (Dict[str, Any]): Optional json-logic
+        *chats: List of chat ``Message`` objects
+        evals: JSON logic and
     """
 
     def __init__(
@@ -469,24 +509,24 @@ class Thread:
                 evals[k] = tu.json_logic(e, {"response": out})
             return evals
 
-    def step_streaming(self, model: ModelInterface, /, eval: bool = False):
-        out = ""
-        for x in model.stream_chat(self):
-            yield x
-            if isinstance(x, dict):
-                out = x
-            else:
-                out += x
-        if eval:
-            yield self._eval(out)
-        self.append(assistant(out))
+    # def step_streaming(self, model: ModelInterface, /, eval: bool = False):
+    #     out = ""
+    #     for x in model.stream_chat(self):
+    #         yield x
+    #         if isinstance(x, dict):
+    #             out = x
+    #         else:
+    #             out += x
+    #     if eval:
+    #         yield self._eval(out)
+    #     self.append(assistant(out))
 
-    def step(self, model: ModelInterface, /, eval: bool = False):
-        out = model.chat(self)
-        self.append(assistant(out))
-        if eval:
-            return out, self._eval(out)
-        return out
+    # def step(self, model: ModelInterface, /, eval: bool = False):
+    #     out = model.chat(self)
+    #     self.append(assistant(out))
+    #     if eval:
+    #         return out, self._eval(out)
+    #     return out
 
 
 ########################################################################################################################
@@ -699,7 +739,7 @@ class ThreadsTree:
 
     def pick(self, to: Message = None, from_: Message = None) -> Thread:
         """
-        Get a thread from the Tree srtucture by telling ``to`` and ``from_`` in the tree
+        A poerful methods to get a thread from the Tree srtucture by telling ``to`` and ``from_`` in the tree
         """
         if self.system:
             thread = Thread(system(self.system))
@@ -844,7 +884,7 @@ class ThreadsTree:
     ):
         # perform a full on rollout of the tree and provide necesary callbacks. The underlying threads contain
         # all the necessary information to perform the rollouts
-        raise NotImplementedError("Not implemented yet")
+        raise NotImplementedError("Not implemented yet, contact developers if urgent!")
 
 
 ########################################################################################################################
@@ -1053,6 +1093,9 @@ class Dataset:
         }
 
     def to_disk(self, folder: str, fmt: Optional[str] = None):
+        """
+        Serialise all the items of the container to a folder on the disk
+        """
         config = {}
         config["type"] = "tune"
         config["hf_type"] = fmt
@@ -1063,6 +1106,9 @@ class Dataset:
 
     @classmethod
     def from_disk(cls, folder: str):
+        """
+        Deserialise and rebuild the container from a folder on the disk
+        """
         if not os.path.exists(folder):
             raise ValueError(f"Folder '{folder}' does not exist")
         if not os.path.exists(f"{folder}/train"):

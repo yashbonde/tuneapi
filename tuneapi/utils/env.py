@@ -17,3 +17,14 @@ class _ENV:
 
 
 ENV = _ENV()
+"""
+Convinience class to get environment variables
+
+Usage:
+
+.. code-block:: python
+
+    from tuneapi.utils.env import ENV
+    TUNE_API_KEY = ENV.TUNE_API_KEY()   # get defined values
+    MY_ENV = ENV.MY_ENV()               # get your arbitrary env var
+"""

@@ -91,6 +91,7 @@ def load_module_from_path(fn_name, file_path):
 
 
 def fetch(url, cache="/tmp", method="post", force: bool = False, **kwargs):
+    """fetch a url and cache it"""
     h = hashstr(url)
     fp = os.path.join(cache, h)
     if not force and os.path.exists(fp):
