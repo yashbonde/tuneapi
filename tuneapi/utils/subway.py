@@ -2,12 +2,10 @@
 # REMEMBER: nothing from outside tune should be imported in utils
 
 from requests import Session
-from pydantic import BaseModel
 from typing import Dict, Any, Optional, Tuple
 
 from tuneapi.utils.logger import logger
 from tuneapi.utils.misc import SimplerTimes
-from tuneapi.utils.serdeser import to_json
 
 
 class SubwayClientError(Exception):
@@ -143,8 +141,6 @@ class Subway:
 
         items = {}
         if json:
-            if isinstance(json, BaseModel):
-                json = json.model_dump()
             items["json"] = json
         if data:
             items["data"] = data
