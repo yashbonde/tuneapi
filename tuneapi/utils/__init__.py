@@ -52,13 +52,13 @@ from tuneapi.utils.randomness import (
 )
 from tuneapi.utils.serdeser import (
     dict_to_structpb,
-    from_b64,
-    from_json,
-    from_pickle,
     structpb_to_dict,
-    to_b64,
     to_json,
+    from_json,
+    to_b64,
+    from_b64,
     to_pickle,
+    from_pickle,
     to_s3,
     from_s3,
 )
