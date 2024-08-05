@@ -177,7 +177,7 @@ class TuneModel:
         try:
             response.raise_for_status()
         except Exception as e:
-            print(response.text)
+            yield response.text
             raise e
 
         fn_call = None

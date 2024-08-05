@@ -215,7 +215,7 @@ class Anthropic:
         try:
             r.raise_for_status()
         except Exception as e:
-            print(r.text)
+            yield r.text
             raise e
 
         fn_call = None
