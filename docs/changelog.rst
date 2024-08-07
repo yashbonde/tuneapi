@@ -7,6 +7,28 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.4.16
+------
+
+- Adding support for python 3.12
+- Adding ``tool`` as a valid role in ``tuneapi.types.chats.Message``
+
+0.4.15
+------
+
+- When there is an error in the model API, we used to print the error message. Now we are returning the error message
+  in the response.
+
+0.4.14
+------
+
+- Fix bug where a loose ``pydantic`` import was present
+
+0.4.13
+------
+
+- Bug fixes in JSON deserialisation
+
 0.4.12
 ------
 

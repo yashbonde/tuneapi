@@ -147,6 +147,7 @@ class Message:
         # function response
         "function_resp": FUNCTION_RESP,
         "function-resp": FUNCTION_RESP,
+        "tool": FUNCTION_RESP,
     }
     """A map that contains the popularly known mappings to make life simpler"""
 
