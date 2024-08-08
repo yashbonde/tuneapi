@@ -140,7 +140,12 @@ def to_s3(
         if os.path.exists(x):
             if not content_type:
                 content_type = get_mime_type(x)
-            return s3.upload_file(x, aws_s3_bucket, key, ContentType=content_type)
+            return s3.upload_file(
+                x,
+                aws_s3_bucket,
+                key,
+                ExtraArgs={"ContentType": content_type},
+            )
         else:
             x = x.encode("utf-8")
     return s3.put_object(

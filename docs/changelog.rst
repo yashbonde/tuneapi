@@ -7,6 +7,16 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.4.18
+------
+
+- Fix bug where function response was tried to be deserialised to the JSON and then sent to the different APIs.
+
+0.4.17
+------
+
+- Fix error in ``tuneapi.utils.serdeser.to_s3`` function where content type key was incorrect
+
 0.4.16
 ------
 

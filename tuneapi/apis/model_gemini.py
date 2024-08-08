@@ -76,7 +76,7 @@ class Gemini:
                     }
                 )
             elif m.role == tt.Message.FUNCTION_RESP:
-                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                # _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 messages.append(
                     {
                         "role": "function",
@@ -86,7 +86,7 @@ class Gemini:
                                     "name": prev_fn_name,
                                     "response": {
                                         "name": prev_fn_name,
-                                        "content": _m,
+                                        "content": m.value,
                                     },
                                 }
                             }

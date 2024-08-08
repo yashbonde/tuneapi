@@ -114,14 +114,14 @@ class Anthropic:
                     ],
                 }
             elif m.role == Message.FUNCTION_RESP:
-                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                # _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 msg = {
                     "role": "user",
                     "content": [
                         {
                             "type": "tool_result",
                             "tool_use_id": prev_tool_id,
-                            "content": tu.to_json(_m, tight=True),
+                            "content": tu.to_json(m.value, tight=True),
                         }
                     ],
                 }

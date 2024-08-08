@@ -70,12 +70,12 @@ class Groq:
                     }
                 )
             elif m.role == tt.Message.FUNCTION_RESP:
-                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                # _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 final_messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": prev_tool_id,
-                        "content": tu.to_json(_m, tight=True),
+                        "content": tu.to_json(m.value, tight=True),
                     }
                 )
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
