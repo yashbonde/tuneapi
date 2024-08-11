@@ -1019,15 +1019,16 @@ class ThreadsList(list):
             bench_dataset.append(Thread.from_dict(item))
         return bench_dataset
 
-    def to_disk(self, folder: str, fmt: Optional[str] = None):
+    def to_disk(self, folder: str, fmt: Optional[str] = None, override: bool = False):
         if fmt:
             tu.logger.warn(
                 f"exporting to {fmt} format, you cannot recreate the dataset from this."
             )
-        os.makedirs(folder)
-        with open(f"{folder}/tuneds.jsonl", "w") as f:
+        os.makedirs(folder, exist_ok=override)
+        fp = f"{folder}/tuneds.jsonl"
+        with open(fp, "w") as f:
             for sample in self.items:
-                if fmt == "sharegpt":
+                if fmt == "ft":
                     item, _ = sample.to_ft()
                 elif fmt == "full":
                     item = sample.to_dict(full=True)
@@ -1036,6 +1037,7 @@ class ThreadsList(list):
                 else:
                     raise ValueError(f"Unknown format: {fmt}")
                 f.write(tu.to_json(item, tight=True) + "\n")  # type: ignore
+        return fp
 
     @classmethod
     def from_disk(cls, folder: str):

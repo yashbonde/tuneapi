@@ -19,11 +19,12 @@ class TuneModel:
         self,
         id: Optional[str] = None,
         base_url: str = "https://proxy.tune.app/chat/completions",
+        api_token: Optional[str] = None,
         org_id: Optional[str] = None,
     ):
         self.tune_model_id = id or tu.ENV.TUNEAPI_MODEL("")
         self.base_url = base_url
-        self.tune_api_token = tu.ENV.TUNEAPI_TOKEN("")
+        self.tune_api_token = api_token or tu.ENV.TUNEAPI_TOKEN("")
         self.tune_org_id = org_id or tu.ENV.TUNEORG_ID("")
 
     def __repr__(self) -> str:

@@ -2,18 +2,12 @@
 
 from fire import Fire
 
+from tuneapi import __version__
+
 
 def main():
-    from tuneapi.apis import test_models, benchmark_models
 
-    Fire(
-        {
-            "models": {
-                "test": test_models,
-                "benchmark": benchmark_models,
-            },
-        }
-    )
+    Fire({"version": __version__})
 
 
 if __name__ == "__main__":

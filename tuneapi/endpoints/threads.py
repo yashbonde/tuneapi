@@ -11,48 +11,24 @@ from typing import Optional, List
 import tuneapi.utils as tu
 from tuneapi import types as tt
 
-
-@cache
-def get_sub(
-    base_url,
-    tune_org_id: str,
-    tune_api_key: str,
-) -> tu.Subway:
-
-    sess = tu.Subway._get_session()
-    sess.headers.update({"x-tune-key": tune_api_key})
-    if tune_org_id:
-        sess.headers.update({"X-Organization-Id": tune_org_id})
-    return tu.Subway(base_url, sess)
+from tuneapi.endpoints.common import get_sub
 
 
 class ThreadsAPI:
     def __init__(
         self,
-        tune_org_id: Optional[str] = None,
-        tune_api_key: Optional[str] = None,
-        base_url: str = "https://studio.tune.app/v1/",
+        tune_org_id: str = None,
+        tune_api_key: str = None,
+        base_url: str = "https://studio.tune.app/v1/threads",
     ):
-        self.tune_org_id = tune_org_id or tu.ENV.TUNE_ORG_ID()
-        self.tune_api_key = tune_api_key or tu.ENV.TUNE_API_KEY()
+        self.tune_org_id = tune_org_id or tu.ENV.TUNEORG_ID()
+        self.tune_api_key = tune_api_key or tu.ENV.TUNEAPI_TOKEN()
+        self.base_url = base_url
         if not tune_api_key:
-            raise ValueError("Either pass tune_api_key or set Env var TUNE_API_KEY")
+            raise ValueError("Either pass tune_api_key or set Env var TUNEAPI_TOKEN")
         self.sub = get_sub(base_url, self.tune_org_id, self.tune_api_key)
 
-    def set_token_and_org_id(
-        self,
-        tune_org_id: Optional[str] = None,
-        tune_api_key: Optional[str] = None,
-    ):
-        self.tune_org_id = tune_org_id
-        self.tune_api_key = tune_api_key
-        self.sub = get_sub(self.tune_org_id, self.tune_api_key).threads
-
-    # APIs
-    def put_thread(
-        self,
-        thread: tt.Thread,
-    ) -> tt.Thread:
+    def put_thread(self, thread: tt.Thread) -> tt.Thread:
         if not thread.title:
             thread.title = "thread_" + tu.get_snowflake()
 

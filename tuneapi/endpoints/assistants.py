@@ -9,18 +9,7 @@ from dataclasses import dataclass, asdict
 import tuneapi.utils as tu
 import tuneapi.types as tt
 
-
-@cache
-def get_sub(
-    url,
-    tune_org_id,
-    tune_api_key,
-) -> tu.Subway:
-    sess = tu.Subway._get_session()
-    sess.headers.update({"x-tune-key": tune_api_key})
-    if tune_org_id:
-        sess.headers.update({"X-Organization-Id": tune_org_id})
-    return tu.Subway(url, sess)
+from tuneapi.endpoints.common import get_sub
 
 
 @dataclass
@@ -36,17 +25,14 @@ class AssistantsAPI:
         tune_api_key: str = None,
         base_url: str = "https://studio.tune.app/v1/assistants",
     ):
-        self.tune_org_id = tune_org_id or tu.ENV.TUNE_ORG_ID()
-        self.tune_api_key = tune_api_key or tu.ENV.TUNE_API_KEY()
+        self.tune_org_id = tune_org_id or tu.ENV.TUNEORG_ID()
+        self.tune_api_key = tune_api_key or tu.ENV.TUNEAPI_TOKEN()
+        self.base_url = base_url
         if not tune_api_key:
-            raise ValueError("Either pass tune_api_key or set Env var TUNE_API_KEY")
+            raise ValueError("Either pass tune_api_key or set Env var TUNEAPI_TOKEN")
         self.sub = get_sub(base_url, self.tune_org_id, self.tune_api_key)
 
-    def list_assistants(
-        self,
-        limit: int = 10,
-        order: str = "desc",
-    ):
+    def list_assistants(self, limit: int = 10, order: str = "desc"):
         out = self.sub(params={"limit": limit, "order": order})
         return out["data"]
 

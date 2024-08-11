@@ -7,6 +7,26 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.0 **(breaking)**
+--------------------
+
+In this release we have moved all the Tune Studio specific API out of ``tuneapi.apis`` to ``tuneapi.endpoints`` to avoid
+cluttering the ``apis`` namespace.
+
+.. code-block:: patch
+
+    - from tuneapi import apis as ta
+    + from tuneapi import endpoints as te
+    ...
+    - ta.ThreadsAPI(...)
+    + te.ThreadsAPI(...)
+
+- Add support for finetuning APIs with ``tuneapi.endpoints.FinetuningAPI``
+- Primary environment variables have been changed from ``TUNE_API_KEY`` to ``TUNEAPI_TOKEN`` and from ``TUNE_ORG_ID``
+  to ``TUNEORG_ID``, if you were using these please update your environment variables
+- Removed CLI methods ``test_models`` and ``benchmark_models``, if you want to use those, please copy the code from
+  `this commit <https://github.com/NimbleBoxAI/tuneapi/blob/2fabdae461f4187621fe8ffda73a58a5ab7485b0/tuneapi/apis/__init__.py#L26>`_
+
 0.4.18
 ------
 
