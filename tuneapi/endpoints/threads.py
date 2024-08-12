@@ -19,14 +19,16 @@ class ThreadsAPI:
         self,
         tune_org_id: str = None,
         tune_api_key: str = None,
-        base_url: str = "https://studio.tune.app/v1/threads",
+        base_url: str = "https://studio.tune.app/",
     ):
         self.tune_org_id = tune_org_id or tu.ENV.TUNEORG_ID()
         self.tune_api_key = tune_api_key or tu.ENV.TUNEAPI_TOKEN()
         self.base_url = base_url
-        if not tune_api_key:
+        if not self.tune_api_key:
             raise ValueError("Either pass tune_api_key or set Env var TUNEAPI_TOKEN")
-        self.sub = get_sub(base_url, self.tune_org_id, self.tune_api_key)
+        self.sub = get_sub(
+            base_url + "v1/threads/", self.tune_org_id, self.tune_api_key
+        )
 
     def put_thread(self, thread: tt.Thread) -> tt.Thread:
         if not thread.title:
@@ -46,7 +48,7 @@ class ThreadsAPI:
 
         tu.logger.info("Creating new thread")
         print(tu.to_json(body))
-        out = self.sub.threads("post", json=body)
+        out = self.sub("post", json=body)
         thread.id = out["id"]
         return thread
 
@@ -56,7 +58,7 @@ class ThreadsAPI:
         messages: bool = False,
     ) -> tt.Thread:
         # GET /threads/{thread_id}
-        fn = self.sub.threads.u(thread_id)
+        fn = self.sub.u(thread_id)
         data = fn()
         meta = data.get("metadata", {})
         if meta == None:
@@ -74,7 +76,7 @@ class ThreadsAPI:
 
         if messages:
             # GET /threads/{thread_id}/messages
-            fn = self.sub.threads.u(thread_id).messages
+            fn = self.sub.u(thread_id).messages
             data = fn()
             for m in data["data"]:
                 text_items = list(filter(lambda x: x["type"] == "text", m["content"]))
@@ -101,7 +103,7 @@ class ThreadsAPI:
         dataset_id: Optional[str] = None,
     ) -> List[tt.Thread]:
         # GET /threads
-        fn = self.sub.threads
+        fn = self.sub
         params = {
             "limit": limit,
             "order": order,
@@ -125,7 +127,7 @@ class ThreadsAPI:
 
     def fill_thread_messages(self, thread: tt.Thread):
         # GET /threads/{thread_id}/messages
-        fn = self.sub.threads.u(thread.id).messages
+        fn = self.sub.u(thread.id).messages
         data = fn()
         for m in data["data"]:
             text_items = list(filter(lambda x: x["type"] == "text", m["content"]))

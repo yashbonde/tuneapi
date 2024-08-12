@@ -32,7 +32,7 @@ class FinetuningAPI:
         self.tune_org_id = tune_org_id or tu.ENV.TUNEORG_ID()
         self.tune_api_key = tune_api_key or tu.ENV.TUNEAPI_TOKEN()
         self.base_url = base_url
-        if not tune_api_key:
+        if not self.tune_api_key:
             raise ValueError("Either pass tune_api_key or set Env var TUNEAPI_TOKEN")
         self.sub = get_sub(
             base_url + "tune.Studio/", self.tune_org_id, self.tune_api_key

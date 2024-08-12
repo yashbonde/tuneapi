@@ -7,6 +7,11 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.1
+-----
+
+- Fix bug in the endpoints module where error was raised despite correct inputs
+
 0.5.0 **(breaking)**
 --------------------
 
