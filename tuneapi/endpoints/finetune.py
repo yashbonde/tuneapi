@@ -38,6 +38,38 @@ class FinetuningAPI:
             base_url + "tune.Studio/", self.tune_org_id, self.tune_api_key
         )
 
+    def upload_dataset_file(self, filepath: str, name: str):
+        # first we get the presigned URL for the dataset
+        data = self.sub.UploadDataset(
+            "post",
+            json={
+                "auth": {
+                    "organization": self.tune_org_id,
+                },
+                "dataset": {
+                    "name": name,
+                    "contentType": "application/jsonl",
+                    "datasetType": "chat",
+                    "size": os.stat(filepath).st_size,
+                },
+            },
+        )
+        with open(filepath, "rb") as f:
+            files = {"file": (filepath, f)}
+            http_response = requests.post(
+                data["code"]["s3Url"],
+                data=data["code"]["s3Meta"],
+                files=files,
+            )
+            if http_response.status_code == 204:
+                tu.logger.info("Upload successful!")
+            else:
+                raise ValueError(
+                    f"Upload failed with status code: {http_response.status_code} and response: {http_response.text}"
+                )
+
+        return FTDataset(path="datasets/chat/" + name, type="relic")
+
     def upload_dataset(
         self,
         threads: tt.ThreadsList | str,

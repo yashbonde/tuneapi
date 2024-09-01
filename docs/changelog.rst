@@ -7,6 +7,21 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.3
+-----
+
+- Fix bug in Tune proxy API where incorrect variable ``stop_sequence`` was sent instead of the correct ``stop`` causing
+  incorrect behaviour.
+- bump dependency to ``protobuf>=5.27.3``
+- remove ``__version__`` from tuneapi package
+- remove CLI entrypoint in ``pyproject.toml``
+
+0.5.2
+-----
+
+- Add ability to upload any file using ``tuneapi.endpoints.FinetuningAPI.upload_dataset_file`` to support the existing
+  way to uploading using threads.
+
 0.5.1
 -----
 

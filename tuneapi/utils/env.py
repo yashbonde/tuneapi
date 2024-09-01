@@ -8,8 +8,8 @@ class _ENV:
     def __init__(self):
         self.vars_called = set()
 
-    TUNEAPI_TOKEN = lambda x="": os.getenv("TUNEAPI_TOKEN", x)
-    TUNEORG_ID = lambda x="": os.getenv("TUNEORG_ID", x)
+    TUNEAPI_TOKEN = lambda _, x="": os.getenv("TUNEAPI_TOKEN", x)
+    TUNEORG_ID = lambda _, x="": os.getenv("TUNEORG_ID", x)
 
     def __getattr__(self, __name: str):
         self.vars_called.add(__name)

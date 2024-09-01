@@ -6,7 +6,7 @@ Connect to the `TuneAI Proxy API <https://studio.tune.app/>`_ and use our standa
 
 import json
 import requests
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -113,7 +113,8 @@ class TuneModel:
         max_tokens: int = 1024,
         temperature: float = 0.7,
         token: Optional[str] = None,
-        timeout=(5, 30),
+        timeout=(5, 60),
+        stop: Optional[List[str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
         output = ""
@@ -124,6 +125,7 @@ class TuneModel:
             temperature=temperature,
             token=token,
             timeout=timeout,
+            stop=stop,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -140,7 +142,7 @@ class TuneModel:
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop_sequence: Optional[str] = None,
+        stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
     ):
@@ -157,8 +159,8 @@ class TuneModel:
             "stream": True,
             "max_tokens": max_tokens,
         }
-        if stop_sequence:
-            data["stop_sequence"] = stop_sequence
+        if stop:
+            data["stop"] = stop
         if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
