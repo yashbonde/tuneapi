@@ -77,7 +77,7 @@ async def chat_completions(request: Request, data: ChatCompletionRequest):
             max_tokens=data.max_tokens,
         )
         api_resp = tu.generator_to_api_events(
-            model=model.tune_model_id,
+            model=model.model_id,
             generator=stream_resp,
         )
         return StreamingResponse(api_resp, media_type="text/event-stream")

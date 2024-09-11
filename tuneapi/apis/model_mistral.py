@@ -14,25 +14,25 @@ from tuneapi.utils import ENV, SimplerTimes as stime, from_json, to_json
 from tuneapi.types import Thread, human, Message
 
 
-class Mistral:
+class Mistral(tt.ModelInterface):
     def __init__(
         self,
         id: Optional[str] = "mistral-small-latest",
         base_url: str = "https://api.mistral.ai/v1/chat/completions",
     ):
-        self.mistral_model_id = id
+        self.model_id = id
         self.base_url = base_url
-        self.mistral_api_token = ENV.MISTRAL_TOKEN("")
+        self.api_token = ENV.MISTRAL_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
-        self.mistral_api_token = token
+        self.api_token = token
 
     def _process_input(self, chats, token: Optional[str] = None):
-        if not token and not self.mistral_api_token:  # type: ignore
+        if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Please set MISTRAL_TOKEN environment variable or pass through function"
             )
-        token = token or self.mistral_api_token
+        token = token or self.api_token
 
         if isinstance(chats, tt.Thread):
             thread = chats
@@ -134,7 +134,7 @@ class Mistral:
         headers, messages = self._process_input(chats, token)
         data = {
             "messages": messages,
-            "model": model or self.mistral_model_id,
+            "model": model or self.model_id,
             "stream": True,
             "max_tokens": max_tokens,
             "tools": tools,

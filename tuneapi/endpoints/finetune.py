@@ -141,6 +141,15 @@ class FinetuningAPI:
         """
         Read more about supported models `here <https://studio.tune.app/docs/concepts/finetuning#creating-a-fine-tune-job>`_.
         """
+        datasets_list = []
+        for x in datasets:
+            if not isinstance(x, FTDataset) and isinstance(x, dict):
+                datasets_list.append(asdict(FTDataset(**x)))
+            elif not isinstance(x, FTDataset):
+                raise ValueError("Datasets should be of type FTDataset or a dict")
+            else:
+                datasets_list.append(asdict(x))
+
         data = self.sub.CreateFinetuneJob(
             "post",
             json={
@@ -148,7 +157,7 @@ class FinetuningAPI:
                 "job": {
                     "name": name,
                     "baseModel": base_model,
-                    "datasets": [asdict(x) for x in datasets],
+                    "datasets": datasets_list,
                     "resource": {"gpu": "nvidia-l4", "gpuCount": "1", "maxRetries": 1},
                     "trainingConfig": {
                         "num_epochs": num_epochs,

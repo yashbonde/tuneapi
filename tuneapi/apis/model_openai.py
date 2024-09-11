@@ -13,21 +13,21 @@ import tuneapi.utils as tu
 import tuneapi.types as tt
 
 
-class Openai:
+class Openai(tt.ModelInterface):
     def __init__(
         self,
         id: Optional[str] = "gpt-4o",
         base_url: str = "https://api.openai.com/v1/chat/completions",
     ):
-        self.openai_model_id = id
+        self.model_id = id
         self.base_url = base_url
-        self.openai_api_token = tu.ENV.OPENAI_TOKEN("")
+        self.api_token = tu.ENV.OPENAI_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
-        self.openai_api_token = token
+        self.api_token = token
 
     def _process_input(self, chats, token: Optional[str] = None):
-        if not token and not self.openai_api_token:  # type: ignore
+        if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "OpenAI API key not found. Please set OPENAI_TOKEN environment variable or pass through function"
             )
@@ -87,7 +87,7 @@ class Openai:
 
     def _process_header(self, token: Optional[str] = None):
         return {
-            "Authorization": "Bearer " + (token or self.openai_api_token),
+            "Authorization": "Bearer " + (token or self.api_token),
             "Content-Type": "application/json",
         }
 
@@ -130,7 +130,7 @@ class Openai:
         data = {
             "temperature": temperature,
             "messages": messages,
-            "model": model or self.openai_model_id,
+            "model": model or self.model_id,
             "stream": True,
             "max_tokens": max_tokens,
         }

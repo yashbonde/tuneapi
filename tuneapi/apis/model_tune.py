@@ -12,7 +12,7 @@ import tuneapi.utils as tu
 import tuneapi.types as tt
 
 
-class TuneModel:
+class TuneModel(tt.ModelInterface):
     """Defines the model used in tune.app. See [Tune Studio](https://studio.tune.app/) for more information."""
 
     def __init__(
@@ -22,30 +22,30 @@ class TuneModel:
         api_token: Optional[str] = None,
         org_id: Optional[str] = None,
     ):
-        self.tune_model_id = id or tu.ENV.TUNEAPI_MODEL("")
+        self.model_id = id or tu.ENV.TUNEAPI_MODEL("")
         self.base_url = base_url
-        self.tune_api_token = api_token or tu.ENV.TUNEAPI_TOKEN("")
-        self.tune_org_id = org_id or tu.ENV.TUNEORG_ID("")
+        self.api_token = api_token or tu.ENV.TUNEAPI_TOKEN("")
+        self.org_id = org_id or tu.ENV.TUNEORG_ID("")
 
     def __repr__(self) -> str:
-        out = f"<TuneModel: {self.tune_model_id}"
-        if self.tune_org_id:
-            out += f" | {self.tune_org_id}"
+        out = f"<TuneModel: {self.model_id}"
+        if self.org_id:
+            out += f" | {self.org_id}"
         out += ">"
         return out
 
     def set_api_token(self, token: str) -> None:
-        self.tune_api_token = token
+        self.api_token = token
 
     def set_org_id(self, org_id: str) -> None:
-        self.tune_org_id = org_id
+        self.org_id = org_id
 
     def _process_input(self, chats, token: Optional[str] = None):
-        if not token and not self.tune_api_token:  # type: ignore
+        if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Tune API key not found. Please set TUNEAPI_TOKEN environment variable or pass through function"
             )
-        token = token or self.tune_api_token
+        token = token or self.api_token
 
         if isinstance(chats, tt.Thread):
             thread = chats
@@ -102,8 +102,8 @@ class TuneModel:
             "Authorization": token,
             "Content-Type": "application/json",
         }
-        if self.tune_org_id:
-            headers["X-Org-Id"] = self.tune_org_id
+        if self.org_id:
+            headers["X-Org-Id"] = self.org_id
         return headers, final_messages
 
     def chat(
@@ -146,7 +146,7 @@ class TuneModel:
         raw: bool = False,
         debug: bool = False,
     ):
-        model = model or self.tune_model_id
+        model = model or self.model_id
         if not model:
             raise Exception(
                 "Tune Model ID not found. Please set TUNEAPI_MODEL environment variable or pass through function"
@@ -167,7 +167,7 @@ class TuneModel:
             ]
         if debug:
             fp = "sample_tune.json"
-            print("Saving at path " + fp)
+            tu.logger.info("Saving at path " + fp)
             tu.to_json(data, fp=fp)
 
         response = requests.post(
@@ -180,6 +180,7 @@ class TuneModel:
         try:
             response.raise_for_status()
         except Exception as e:
+            tu.logger.error(response.text)
             yield response.text
             raise e
 

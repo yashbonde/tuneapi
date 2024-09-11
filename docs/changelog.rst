@@ -7,6 +7,11 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.4
+-----
+
+- Standardise ``tuneapi.types.chats.ModelInterface`` to have ``model_id``, ``api_token`` added to the base class.
+
 0.5.3
 -----
 

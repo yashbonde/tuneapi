@@ -13,21 +13,21 @@ import tuneapi.utils as tu
 import tuneapi.types as tt
 
 
-class Gemini:
+class Gemini(tt.ModelInterface):
     def __init__(
         self,
         id: Optional[str] = "gemini-1.5-pro-latest",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
     ):
-        self._gemeni_model_id = id
+        self.model_id = id
         self.base_url = base_url
-        self.gemini_token = tu.ENV.GEMINI_TOKEN("")
+        self.api_token = tu.ENV.GEMINI_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
-        self.gemini_token = token
+        self.api_token = token
 
     def _process_input(self, chats, token: Optional[str] = None):
-        if not token and not self.gemini_token:  # type: ignore
+        if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Gemini API key not found. Please set GEMINI_TOKEN environment variable or pass through function"
             )
@@ -98,7 +98,7 @@ class Gemini:
 
         # create headers
         headers = self._process_header()
-        params = {"key": self.gemini_token}
+        params = {"key": self.api_token}
         return headers, system.strip(), messages, params
 
     def _process_header(self):
@@ -197,7 +197,7 @@ class Gemini:
 
         response = requests.post(
             self.base_url.format(
-                id=model or self._gemeni_model_id,
+                id=model or self.model_id,
                 rpc="streamGenerateContent",
             ),
             headers=headers,
@@ -225,12 +225,14 @@ class Gemini:
                 continue
             block_lines += line
 
-            # is the block done?
-            if line == "{":
-                done = False
-            elif line == "}":
+            done = False
+            try:
+                tu.from_json(block_lines)
                 done = True
+            except Exception as e:
+                pass
 
+            # print(f"{block_lines=}")
             if done:
                 part_data = json.loads(block_lines)["candidates"][0]["content"][
                     "parts"

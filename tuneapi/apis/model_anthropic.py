@@ -10,75 +10,44 @@ import requests
 from typing import Optional, Dict, Any, Tuple, List
 
 import tuneapi.utils as tu
-from tuneapi.types import Thread, human, Message
+import tuneapi.types as tt
 
 
-class Anthropic:
+class Anthropic(tt.ModelInterface):
     def __init__(
         self,
         id: Optional[str] = "claude-3-haiku-20240307",
         base_url: str = "https://api.anthropic.com/v1/messages",
     ):
-        self.anthropic_model = id
+        self.model_id = id
         self.base_url = base_url
-        self.anthropic_api_token = tu.ENV.ANTHROPIC_TOKEN("")
+        self.api_token = tu.ENV.ANTHROPIC_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
-        self.anthropic_api_token = token
-
-    def tool_to_claude_xml(self, tool):
-        """
-        Deprecated: was written when function calling did not exist in Anthropic API.
-        """
-        tool_signature = ""
-        if len(tool["parameters"]) > 0:
-            for name, p in tool["parameters"]["properties"].items():
-                param = f"""<parameter>
-                <name> {name} </name>
-                <type> {p['type']} </type>
-                <description> {p['description']} </description>
-                """
-                if name in tool["parameters"]["required"]:
-                    param += "<required> true </required>\n"
-                param += "</parameter>"
-                tool_signature += param + "\n"
-        tool_signature = tool_signature.strip()
-
-        constructed_prompt = (
-            "<tool_description>\n"
-            f"<tool_name> {tool['name']} </tool_name>\n"
-            "<description>\n"
-            f"{tool['description']}\n"
-            "</description>\n"
-            "<parameters>\n"
-            f"{tool_signature}\n"
-            "</parameters>\n"
-            "</tool_description>"
-        )
-        return constructed_prompt
+        self.api_token = token
 
     def _process_input(self, chats, token: Optional[str] = None):
-        if not token and not self.anthropic_api_token:  # type: ignore
+        if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Please set ANTHROPIC_TOKEN environment variable or pass through function"
             )
-        token = token or self.anthropic_api_token
-        if isinstance(chats, Thread):
+        token = token or self.api_token
+        if isinstance(chats, tt.Thread):
             thread = chats
         elif isinstance(chats, str):
-            thread = Thread(human(chats))
+            thread = tt.Thread(tt.human(chats))
         else:
             raise Exception("Invalid input")
 
         # create the anthropic style data
         system = ""
-        if thread.chats[0].role == Message.SYSTEM:
+        if thread.chats[0].role == tt.Message.SYSTEM:
             system = thread.chats[0].value
 
         claude_messages = []
         prev_tool_id = tu.get_random_string(5)
         for m in thread.chats[int(system != "") :]:
-            if m.role == Message.HUMAN:
+            if m.role == tt.Message.HUMAN:
                 msg = {
                     "role": "user",
                     "content": [{"type": "text", "text": m.value.strip()}],
@@ -95,12 +64,12 @@ class Anthropic:
                                 },
                             }
                         )
-            elif m.role == Message.GPT:
+            elif m.role == tt.Message.GPT:
                 msg = {
                     "role": "assistant",
                     "content": [{"type": "text", "text": m.value.strip()}],
                 }
-            elif m.role == Message.FUNCTION_CALL:
+            elif m.role == tt.Message.FUNCTION_CALL:
                 _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 msg = {
                     "role": "assistant",
@@ -113,7 +82,7 @@ class Anthropic:
                         }
                     ],
                 }
-            elif m.role == Message.FUNCTION_RESP:
+            elif m.role == tt.Message.FUNCTION_RESP:
                 # _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 msg = {
                     "role": "user",
@@ -139,7 +108,7 @@ class Anthropic:
 
     def chat(
         self,
-        chats: Thread | str,
+        chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: Optional[float] = None,
@@ -170,7 +139,7 @@ class Anthropic:
 
     def stream_chat(
         self,
-        chats: Thread | str,
+        chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: Optional[float] = None,
@@ -182,14 +151,14 @@ class Anthropic:
     ) -> Any:
 
         tools = []
-        if isinstance(chats, Thread):
+        if isinstance(chats, tt.Thread):
             tools = [x.to_dict() for x in chats.tools]
             for t in tools:
                 t["input_schema"] = t.pop("parameters")
         headers, system, claude_messages = self._process_input(chats=chats, token=token)
 
         data = {
-            "model": model or self.anthropic_model,
+            "model": model or self.model_id,
             "max_tokens": max_tokens,
             "messages": claude_messages,
             "system": system,

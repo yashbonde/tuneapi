@@ -188,7 +188,11 @@ class Message:
             idx = max(os.get_terminal_size().columns - len(self.role) - 40, 10)
         except OSError:
             idx = 50
-        return f"<{self.role}: {json.dumps(self.value)[:idx]}>"
+        if isinstance(self.value, str):
+            _msg = "\\n".join(self.value.splitlines())
+        else:
+            _msg = tu.to_json(self.value, tight=True)
+        return f"<{self.role}: {_msg[:idx]}>"
 
     def __radd__(self, other: str):
         return Message(self.value + other, self.role)
@@ -295,11 +299,19 @@ function_resp = partial(Message, role=Message.FUNCTION_RESP)
 class ModelInterface:
     """This is the generic interface implemented by all the model APIs"""
 
+    model_id: str
+    """This is the model ID for the model"""
+
+    api_token: str
+    """This is the API token for the model"""
+
     def set_api_token(self, token: str) -> None:
         """This are used to set the API token for the model"""
+        raise NotImplementedError("This model has no operation for this.")
 
     def set_org_id(self, org_id: str) -> None:
         """This are used to set the Organisation ID for the model"""
+        raise NotImplementedError("This model has no operation for this.")
 
     def chat(
         self,
@@ -395,6 +407,11 @@ class Thread:
         raise AttributeError(f"Attribute {__name} not found")
 
     def __getitem__(self, __x) -> Any:
+        if isinstance(__x, tuple):
+            new_thread = self.copy()
+            start, end, step = __x
+            new_thread.chats = new_thread.chats[start:end:step]
+            return new_thread
         return self.chats[__x]
 
     def __radd__(self, other: "Thread"):

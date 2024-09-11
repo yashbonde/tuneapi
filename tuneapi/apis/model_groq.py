@@ -12,25 +12,25 @@ import tuneapi.utils as tu
 import tuneapi.types as tt
 
 
-class Groq:
+class Groq(tt.ModelInterface):
     def __init__(
         self,
         id: Optional[str] = "llama3-70b-8192",
         base_url: str = "https://api.groq.com/openai/v1/chat/completions",
     ):
-        self.groq_model_id = id
+        self.model_id = id
         self.base_url = base_url
-        self.groq_api_token = tu.ENV.GROQ_TOKEN("")
+        self.api_token = tu.ENV.GROQ_TOKEN("")
 
     def set_api_token(self, token: str) -> None:
-        self.groq_api_token = token
+        self.api_token = token
 
     def _process_input(self, chats, token: Optional[str] = None):
-        if not token and not self.groq_api_token:  # type: ignore
+        if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Please set GROQ_TOKEN environment variable or pass through function"
             )
-        token = token or self.groq_api_token
+        token = token or self.api_token
         if isinstance(chats, tt.Thread):
             thread = chats
         elif isinstance(chats, str):
@@ -132,7 +132,7 @@ class Groq:
         data = {
             "temperature": temperature,
             "messages": messages,
-            "model": model or self.groq_model_id,
+            "model": model or self.model_id,
             "stream": True,
             "max_tokens": max_tokens,
             "tools": tools,
