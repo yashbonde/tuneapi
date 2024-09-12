@@ -114,6 +114,7 @@ class Anthropic(tt.ModelInterface):
         temperature: Optional[float] = None,
         token: Optional[str] = None,
         return_message: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ):
         output = ""
@@ -124,6 +125,7 @@ class Anthropic(tt.ModelInterface):
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
+            extra_headers=extra_headers,
             raw=False,
             **kwargs,
         ):
@@ -147,6 +149,7 @@ class Anthropic(tt.ModelInterface):
         timeout=(5, 30),
         raw: bool = False,
         debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> Any:
 
@@ -156,6 +159,8 @@ class Anthropic(tt.ModelInterface):
             for t in tools:
                 t["input_schema"] = t.pop("parameters")
         headers, system, claude_messages = self._process_input(chats=chats, token=token)
+        if extra_headers:
+            headers.update(extra_headers)
 
         data = {
             "model": model or self.model_id,

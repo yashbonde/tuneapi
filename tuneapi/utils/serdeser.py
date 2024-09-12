@@ -6,7 +6,6 @@ import json
 import cloudpickle
 from typing import Any, Dict
 from base64 import b64encode, b64decode
-from google.protobuf.struct_pb2 import Struct
 
 from tuneapi.utils.mime import get_mime_type
 
@@ -97,13 +96,17 @@ def from_b64(x: str):
     return b64decode(x.encode("utf-8"))
 
 
-def dict_to_structpb(data: Dict) -> Struct:
+def dict_to_structpb(data: Dict):
+    from google.protobuf.struct_pb2 import Struct
+
     s = Struct()
     s.update(data)
     return s
 
 
-def structpb_to_dict(struct: Struct, out: Dict = None) -> Dict:
+def structpb_to_dict(struct, out: Dict = None) -> Dict:
+    from google.protobuf.struct_pb2 import Struct
+
     if not out:
         out = {}
     for key, value in struct.items():

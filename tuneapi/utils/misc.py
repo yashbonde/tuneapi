@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from datetime import datetime, timezone, timedelta
-from google.protobuf.timestamp_pb2 import Timestamp as Timestamp_pb
 
 from tuneapi.utils.logger import logger
 from tuneapi.utils.serdeser import to_json
@@ -54,7 +53,9 @@ class SimplerTimes:
             dt = dt.astimezone(tz)
         return dt.strftime(fmt_str)
 
-    def get_now_pb() -> Timestamp_pb:
+    def get_now_pb():
+        from google.protobuf.timestamp_pb2 import Timestamp as Timestamp_pb
+
         ts = Timestamp_pb()
         ts.GetCurrentTime()
         return ts

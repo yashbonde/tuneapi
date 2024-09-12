@@ -7,6 +7,17 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.6
+-----
+
+- Remove protobuf as a dependency in because bunch of other packages break. The functions are still present
+
+0.5.5
+-----
+
+- In all implmenetations of ``tuneapi.types.chats.ModelInterface`` add new input to the API endpoints called ``extra_headers``
+  which is a dictionary to update the outgoing headers.
+
 0.5.4
 -----
 

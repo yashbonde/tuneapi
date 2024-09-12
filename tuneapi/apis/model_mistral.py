@@ -99,6 +99,7 @@ class Mistral(tt.ModelInterface):
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=(5, 30),
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
         output = ""
@@ -109,6 +110,8 @@ class Mistral(tt.ModelInterface):
             temperature=temperature,
             token=token,
             timeout=timeout,
+            extra_headers=extra_headers,
+            raw=False,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -127,11 +130,14 @@ class Mistral(tt.ModelInterface):
         timeout=(5, 60),
         raw: bool = False,
         debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         tools = []
         if isinstance(chats, Thread):
             tools = [{"type": "function", "function": x.to_dict()} for x in chats.tools]
         headers, messages = self._process_input(chats, token)
+        if extra_headers:
+            headers.update(extra_headers)
         data = {
             "messages": messages,
             "model": model or self.model_id,

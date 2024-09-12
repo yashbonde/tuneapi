@@ -7,7 +7,7 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 
 import json
 import requests
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -114,7 +114,7 @@ class Gemini(tt.ModelInterface):
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=None,
-        raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> Any:
         output = ""
@@ -125,7 +125,8 @@ class Gemini(tt.ModelInterface):
             temperature=temperature,
             token=token,
             timeout=timeout,
-            raw=raw,
+            extra_headers=extra_headers,
+            raw=False,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -144,12 +145,15 @@ class Gemini(tt.ModelInterface):
         timeout=(5, 60),
         raw: bool = False,
         debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ):
         tools = []
         if isinstance(chats, tt.Thread):
             tools = [x.to_dict() for x in chats.tools]
         headers, system, messages, params = self._process_input(chats, token)
+        if extra_headers:
+            headers.update(extra_headers)
         data = {
             "systemInstruction": {
                 "parts": [{"text": system}],

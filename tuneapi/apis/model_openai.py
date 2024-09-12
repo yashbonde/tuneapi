@@ -6,8 +6,8 @@ Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs
 
 import json
 import requests
-from typing import Optional, Any, List
 
+from typing import Optional, Any, List, Dict
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -98,6 +98,7 @@ class Openai(tt.ModelInterface):
         max_tokens: int = 1024,
         temperature: float = 1,
         token: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> Any:
         output = ""
@@ -107,6 +108,8 @@ class Openai(tt.ModelInterface):
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
+            extra_headers=extra_headers,
+            raw=False,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -123,10 +126,13 @@ class Openai(tt.ModelInterface):
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=(5, 60),
-        raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
+        raw: bool = False,
     ):
         headers, messages = self._process_input(chats, token)
+        if extra_headers:
+            headers.update(extra_headers)
         data = {
             "temperature": temperature,
             "messages": messages,
@@ -191,11 +197,14 @@ class Openai(tt.ModelInterface):
         token: Optional[str] = None,
         timeout=(5, 60),
         raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         """If you pass a list then returned items are in the insertion order"""
         text = []
 
         headers = self._process_header(token)
+        if extra_headers:
+            headers.update(extra_headers)
         if isinstance(chats, tt.Thread):
             _, messages = self._process_input(chats, token)
             for i, m in enumerate(messages):

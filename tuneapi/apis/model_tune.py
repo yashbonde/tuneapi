@@ -115,6 +115,7 @@ class TuneModel(tt.ModelInterface):
         token: Optional[str] = None,
         timeout=(5, 60),
         stop: Optional[List[str]] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
         output = ""
@@ -126,6 +127,8 @@ class TuneModel(tt.ModelInterface):
             token=token,
             timeout=timeout,
             stop=stop,
+            extra_headers=extra_headers,
+            raw=False,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -145,6 +148,7 @@ class TuneModel(tt.ModelInterface):
         stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         model = model or self.model_id
         if not model:
@@ -152,6 +156,8 @@ class TuneModel(tt.ModelInterface):
                 "Tune Model ID not found. Please set TUNEAPI_MODEL environment variable or pass through function"
             )
         headers, messages = self._process_input(chats, token)
+        if extra_headers:
+            headers.update(extra_headers)
         data = {
             "temperature": temperature,
             "messages": messages,
