@@ -7,6 +7,11 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.7
+-----
+
+- Implement ``extra_headers`` via ``__init__`` as well.
+
 0.5.6
 -----
 

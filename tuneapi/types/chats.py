@@ -321,6 +321,7 @@ class ModelInterface:
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=(5, 30),
+        extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
         """This is the main function to block chat with the model"""
@@ -335,6 +336,7 @@ class ModelInterface:
         timeout=(5, 60),
         raw: bool = False,
         debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         """This is the main function to stream chat with the model where each token is iteratively generated"""
 

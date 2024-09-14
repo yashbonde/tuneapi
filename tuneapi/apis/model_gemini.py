@@ -18,10 +18,12 @@ class Gemini(tt.ModelInterface):
         self,
         id: Optional[str] = "gemini-1.5-pro-latest",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         self.model_id = id
         self.base_url = base_url
         self.api_token = tu.ENV.GEMINI_TOKEN("")
+        self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -152,6 +154,7 @@ class Gemini(tt.ModelInterface):
         if isinstance(chats, tt.Thread):
             tools = [x.to_dict() for x in chats.tools]
         headers, system, messages, params = self._process_input(chats, token)
+        extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
         data = {

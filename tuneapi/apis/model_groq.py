@@ -17,10 +17,12 @@ class Groq(tt.ModelInterface):
         self,
         id: Optional[str] = "llama3-70b-8192",
         base_url: str = "https://api.groq.com/openai/v1/chat/completions",
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         self.model_id = id
         self.base_url = base_url
         self.api_token = tu.ENV.GROQ_TOKEN("")
+        self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -133,6 +135,7 @@ class Groq(tt.ModelInterface):
         if isinstance(chats, tt.Thread):
             tools = [{"type": "function", "function": x.to_dict()} for x in chats.tools]
         headers, messages = self._process_input(chats, token)
+        extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
         data = {

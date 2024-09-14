@@ -21,11 +21,13 @@ class TuneModel(tt.ModelInterface):
         base_url: str = "https://proxy.tune.app/chat/completions",
         api_token: Optional[str] = None,
         org_id: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         self.model_id = id or tu.ENV.TUNEAPI_MODEL("")
         self.base_url = base_url
         self.api_token = api_token or tu.ENV.TUNEAPI_TOKEN("")
         self.org_id = org_id or tu.ENV.TUNEORG_ID("")
+        self.extra_headers = extra_headers
 
     def __repr__(self) -> str:
         out = f"<TuneModel: {self.model_id}"
@@ -156,6 +158,7 @@ class TuneModel(tt.ModelInterface):
                 "Tune Model ID not found. Please set TUNEAPI_MODEL environment variable or pass through function"
             )
         headers, messages = self._process_input(chats, token)
+        extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
         data = {

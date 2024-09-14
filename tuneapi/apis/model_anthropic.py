@@ -18,10 +18,12 @@ class Anthropic(tt.ModelInterface):
         self,
         id: Optional[str] = "claude-3-haiku-20240307",
         base_url: str = "https://api.anthropic.com/v1/messages",
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         self.model_id = id
         self.base_url = base_url
         self.api_token = tu.ENV.ANTHROPIC_TOKEN("")
+        self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -159,6 +161,7 @@ class Anthropic(tt.ModelInterface):
             for t in tools:
                 t["input_schema"] = t.pop("parameters")
         headers, system, claude_messages = self._process_input(chats=chats, token=token)
+        extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
 

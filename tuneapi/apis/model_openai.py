@@ -18,10 +18,12 @@ class Openai(tt.ModelInterface):
         self,
         id: Optional[str] = "gpt-4o",
         base_url: str = "https://api.openai.com/v1/chat/completions",
+        extra_headers: Optional[Dict[str, str]] = None,
     ):
         self.model_id = id
         self.base_url = base_url
         self.api_token = tu.ENV.OPENAI_TOKEN("")
+        self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -131,6 +133,7 @@ class Openai(tt.ModelInterface):
         raw: bool = False,
     ):
         headers, messages = self._process_input(chats, token)
+        extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
         data = {
@@ -187,8 +190,6 @@ class Openai(tt.ModelInterface):
             yield fn_call
         return
 
-    # def _process_chat_to_string_for_embedding(self, chat: tt.Thread):
-
     def embedding(
         self,
         chats: tt.Thread | List[str] | str,
@@ -203,6 +204,7 @@ class Openai(tt.ModelInterface):
         text = []
 
         headers = self._process_header(token)
+        extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
         if isinstance(chats, tt.Thread):
