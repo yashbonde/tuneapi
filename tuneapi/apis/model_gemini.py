@@ -14,9 +14,10 @@ import tuneapi.types as tt
 
 
 class Gemini(tt.ModelInterface):
+
     def __init__(
         self,
-        id: Optional[str] = "gemini-1.5-pro-latest",
+        id: Optional[str] = "gemini-1.5-flash",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
         extra_headers: Optional[Dict[str, str]] = None,
     ):
@@ -120,21 +121,28 @@ class Gemini(tt.ModelInterface):
         **kwargs,
     ) -> Any:
         output = ""
-        for x in self.stream_chat(
-            chats=chats,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            token=token,
-            timeout=timeout,
-            extra_headers=extra_headers,
-            raw=False,
-            **kwargs,
-        ):
-            if isinstance(x, dict):
-                output = x
+        x = None
+        try:
+            for x in self.stream_chat(
+                chats=chats,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                token=token,
+                timeout=timeout,
+                extra_headers=extra_headers,
+                raw=False,
+                **kwargs,
+            ):
+                if isinstance(x, dict):
+                    output = x
+                else:
+                    output += x
+        except Exception as e:
+            if not x:
+                raise e
             else:
-                output += x
+                raise ValueError(x)
         return output
 
     def stream_chat(
@@ -194,7 +202,14 @@ class Gemini(tt.ModelInterface):
                     "mode": "ANY",
                 }
             }
-            data["tools"] = [{"function_declarations": tools}]
+            std_tools = []
+            for i, t in enumerate(tools):
+                props = t["parameters"]["properties"]
+                t_copy = t.copy()
+                if not props:
+                    t_copy.pop("parameters")
+                std_tools.append(t_copy)
+            data["tools"] = [{"function_declarations": std_tools}]
         data.update(kwargs)
 
         if debug:

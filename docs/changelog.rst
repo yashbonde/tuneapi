@@ -7,6 +7,13 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.8
+-----
+
+- If you have ``numpy`` installed in your environment, then ``tuneapi.utils.randomness.reservoir_sampling`` will honour
+  the seed value. If you do not have ``numpy`` installed, then the seed value will be ignored.
+- Fix Bug in Gemini API body for functions with no parameters.
+
 0.5.7
 -----
 

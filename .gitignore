@@ -160,3 +160,4 @@ docs/_build
 docs/_templates
 docs/source
 test.py
+wikigen/

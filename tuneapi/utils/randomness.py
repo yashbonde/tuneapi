@@ -6,6 +6,8 @@ import string
 from threading import Lock
 from snowflake import SnowflakeGenerator
 
+from tuneapi.utils.logger import logger
+
 
 def get_random_string(length: int, numbers: bool = True, special: bool = False) -> str:
     choice_items = string.ascii_letters
@@ -39,14 +41,28 @@ class SFGen:
 get_snowflake = SFGen()
 
 
-def reservoir_sampling(stream, k):
+def reservoir_sampling(stream, k, seed: int = 4):
     """
     Perform reservoir sampling on the given stream to select k items.
 
     :param stream: An iterable representing the input stream.
     :param k: The number of items to sample.
+    :param seed: The seed to use for random number generation. Only used if numpy is available. If -1 is passed, the seed
+                    will be randomly generated.
     :return: A list containing k sampled items.
     """
+    try:
+        import numpy as np
+
+        if seed == -1:
+            seed = None
+        rng = np.random.default_rng(seed)
+        foo = rng.integers
+    except ImportError:
+        logger.warning(
+            "Numpy not found, using python's random module. Seed will be ignored."
+        )
+        foo = random.randint
 
     # Initialize an empty reservoir
     reservoir = []
@@ -57,7 +73,7 @@ def reservoir_sampling(stream, k):
             reservoir.append(item)
         else:
             # Randomly replace elements in the reservoir with decreasing probability
-            j = random.randint(0, i)
+            j = foo(0, i)
             if j < k:
                 reservoir[j] = item
 
