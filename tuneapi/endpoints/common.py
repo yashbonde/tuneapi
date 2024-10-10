@@ -15,5 +15,5 @@ def get_sub(
     sess = tu.Subway._get_session()
     sess.headers.update({"x-tune-key": tune_api_key})
     if tune_org_id:
-        sess.headers.update({"x-organization-id": tune_org_id})
+        sess.headers.update({"X-Org-Id": tune_org_id})
     return tu.Subway(base_url, sess)
