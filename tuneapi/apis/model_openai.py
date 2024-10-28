@@ -99,6 +99,7 @@ class Openai(tt.ModelInterface):
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 1,
+        parallel_tool_calls: bool = False,
         token: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
@@ -109,6 +110,7 @@ class Openai(tt.ModelInterface):
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
+            parallel_tool_calls=parallel_tool_calls,
             token=token,
             extra_headers=extra_headers,
             raw=False,
@@ -126,6 +128,7 @@ class Openai(tt.ModelInterface):
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 1,
+        parallel_tool_calls: bool = False,
         token: Optional[str] = None,
         timeout=(5, 60),
         extra_headers: Optional[Dict[str, str]] = None,
@@ -142,6 +145,7 @@ class Openai(tt.ModelInterface):
             "model": model or self.model_id,
             "stream": True,
             "max_tokens": max_tokens,
+            "parallel_tool_calls": parallel_tool_calls,
         }
         if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [

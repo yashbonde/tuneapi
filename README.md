@@ -1,5 +1,4 @@
 # Tune API
 
-Python package for building GenAI apps tightly integrated to Tune Studio.
+This is **not** the official SDK for Tune AI. This is an open source python package used to build GenAI apps at Tune AI.
 
-> The largest utils for any GenAI package ever! See [tuneapi.utils](./tuneapi/utils/__init__.py)

@@ -7,6 +7,16 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.10
+-----
+
+- Remove redundant prints.
+
+0.5.9
+-----
+
+- By default set the value ``parallel_tool_calls`` in OpenAI to ``False``.
+
 0.5.8
 -----
 
