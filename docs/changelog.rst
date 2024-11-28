@@ -7,6 +7,21 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.5.13
+-----
+
+- ``tuneapi.types.ModelInterface`` has an ``extra_headers`` attribute in it.
+
+0.5.12
+-----
+
+- Remove code to sanitize assistant message in for Tune and OpenAI LLM APIs.
+
+0.5.11
+-----
+
+- Fix bug where ``parallel_tool_calls`` was sent even for non tool calls.
+
 0.5.10
 -----
 

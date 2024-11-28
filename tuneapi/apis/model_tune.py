@@ -64,12 +64,7 @@ class TuneModel(tt.ModelInterface):
             elif m.role == tt.Message.HUMAN:
                 final_messages.append({"role": "user", "content": m.value})
             elif m.role == tt.Message.GPT:
-                final_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": m.value.strip(),
-                    }
-                )
+                final_messages.append({"role": "assistant", "content": m.value})
             elif m.role == tt.Message.FUNCTION_CALL:
                 _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 final_messages.append(

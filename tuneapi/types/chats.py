@@ -305,6 +305,9 @@ class ModelInterface:
     api_token: str
     """This is the API token for the model"""
 
+    extra_headers: Dict[str, Any]
+    """This is the placeholder for any extra headers to be passed during request"""
+
     def set_api_token(self, token: str) -> None:
         """This are used to set the API token for the model"""
         raise NotImplementedError("This model has no operation for this.")

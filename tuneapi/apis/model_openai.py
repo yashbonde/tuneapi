@@ -48,12 +48,7 @@ class Openai(tt.ModelInterface):
             elif m.role == tt.Message.HUMAN:
                 final_messages.append({"role": "user", "content": m.value})
             elif m.role == tt.Message.GPT:
-                final_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": m.value.strip(),
-                    }
-                )
+                final_messages.append({"role": "assistant", "content": m.value})
             elif m.role == tt.Message.FUNCTION_CALL:
                 _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 final_messages.append(
@@ -97,7 +92,7 @@ class Openai(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = None,
         temperature: float = 1,
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
@@ -126,7 +121,7 @@ class Openai(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = None,
         temperature: float = 1,
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
@@ -144,13 +139,14 @@ class Openai(tt.ModelInterface):
             "messages": messages,
             "model": model or self.model_id,
             "stream": True,
-            "max_tokens": max_tokens,
-            "parallel_tool_calls": parallel_tool_calls,
         }
+        if max_tokens:
+            data["max_tokens"] = max_tokens
         if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
             ]
+            data["parallel_tool_calls"] = parallel_tool_calls
         if debug:
             fp = "sample_oai.json"
             print("Saving at path " + fp)
