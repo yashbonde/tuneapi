@@ -11,6 +11,7 @@ from typing import Optional, Any, List, Dict
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
+from tuneapi.apis.turbo import distributed_chat
 
 
 class Openai(tt.ModelInterface):
@@ -189,6 +190,23 @@ class Openai(tt.ModelInterface):
             fn_call["arguments"] = tu.from_json(fn_call["arguments"])
             yield fn_call
         return
+
+    def distributed_chat(
+        self,
+        prompts: List[tt.Thread],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+    ):
+        return distributed_chat(
+            self,
+            prompts=prompts,
+            post_logic=post_logic,
+            max_threads=max_threads,
+            retry=retry,
+            pbar=pbar,
+        )
 
     def embedding(
         self,

@@ -7,6 +7,12 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.6.0
+-----
+
+- ``distributed_chat`` functionality in ``tuneapi.apis.turbo`` support. In all APIs search for ``model.distributed_chat()``
+  method. This enables **fault tolerant LLM API calls**.
+
 0.5.13
 -----
 

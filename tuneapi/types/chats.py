@@ -308,6 +308,9 @@ class ModelInterface:
     extra_headers: Dict[str, Any]
     """This is the placeholder for any extra headers to be passed during request"""
 
+    base_url: str
+    """This is the default URL that has to be pinged. This may not be the REST endpoint URL but anything"""
+
     def set_api_token(self, token: str) -> None:
         """This are used to set the API token for the model"""
         raise NotImplementedError("This model has no operation for this.")

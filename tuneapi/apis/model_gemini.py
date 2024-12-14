@@ -7,10 +7,11 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 
 import json
 import requests
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
+from tuneapi.apis.turbo import distributed_chat
 
 
 class Gemini(tt.ModelInterface):
@@ -276,3 +277,20 @@ class Gemini(tt.ModelInterface):
                     fn_call["arguments"] = fn_call.pop("args")
                     yield fn_call
                 block_lines = ""
+
+    def distributed_chat(
+        self,
+        prompts: List[tt.Thread],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+    ):
+        return distributed_chat(
+            self,
+            prompts=prompts,
+            post_logic=post_logic,
+            max_threads=max_threads,
+            retry=retry,
+            pbar=pbar,
+        )

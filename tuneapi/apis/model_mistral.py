@@ -10,8 +10,7 @@ from typing import Optional, Dict, Any, Tuple, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
-from tuneapi.utils import ENV, SimplerTimes as stime, from_json, to_json
-from tuneapi.types import Thread, human, Message
+from tuneapi.apis.turbo import distributed_chat
 
 
 class Mistral(tt.ModelInterface):
@@ -23,7 +22,7 @@ class Mistral(tt.ModelInterface):
     ):
         self.model_id = id
         self.base_url = base_url
-        self.api_token = ENV.MISTRAL_TOKEN("")
+        self.api_token = tu.ENV.MISTRAL_TOKEN("")
         self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
@@ -95,7 +94,7 @@ class Mistral(tt.ModelInterface):
 
     def chat(
         self,
-        chats: Thread | str,
+        chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 1,
@@ -124,7 +123,7 @@ class Mistral(tt.ModelInterface):
 
     def stream_chat(
         self,
-        chats: Thread | str,
+        chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 1,
@@ -135,7 +134,7 @@ class Mistral(tt.ModelInterface):
         extra_headers: Optional[Dict[str, str]] = None,
     ):
         tools = []
-        if isinstance(chats, Thread):
+        if isinstance(chats, tt.Thread):
             tools = [{"type": "function", "function": x.to_dict()} for x in chats.tools]
         headers, messages = self._process_input(chats, token)
         extra_headers = extra_headers or self.extra_headers
@@ -191,6 +190,23 @@ class Mistral(tt.ModelInterface):
                 except:
                     break
         if fn_call:
-            fn_call["arguments"] = from_json(fn_call["arguments"])
+            fn_call["arguments"] = tu.from_json(fn_call["arguments"])
             yield fn_call
         return
+
+    def distributed_chat(
+        self,
+        prompts: List[tt.Thread],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+    ):
+        return distributed_chat(
+            self,
+            prompts=prompts,
+            post_logic=post_logic,
+            max_threads=max_threads,
+            retry=retry,
+            pbar=pbar,
+        )
