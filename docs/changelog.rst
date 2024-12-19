@@ -2,7 +2,7 @@ Changelog
 =========
 
 This package is already used in production at Tune AI, please do not wait for release ``1.x.x`` for stability, or expect
-to reach ``1.0.0``. We do not follow the general rules of semantic versioning, and there can be breaking changes between
+to reach ``1.0.0``. We **do not follow the general rules** of semantic versioning, and there can be breaking changes between
 minor versions.
 
 All relevant steps to be taken will be mentioned here.
@@ -12,6 +12,7 @@ All relevant steps to be taken will be mentioned here.
 
 - ``distributed_chat`` functionality in ``tuneapi.apis.turbo`` support. In all APIs search for ``model.distributed_chat()``
   method. This enables **fault tolerant LLM API calls**.
+- Moved ``tuneapi.types.experimental`` to ``tuneapi.types.evals``
 
 0.5.13
 -----

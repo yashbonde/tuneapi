@@ -14,6 +14,6 @@ from tuneapi.types.chats import (
     function_resp,
 )
 
-from tuneapi.types.experimental import (
+from tuneapi.types.evals import (
     Evals,
 )
