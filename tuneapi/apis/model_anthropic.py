@@ -4,7 +4,6 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 
 # Copyright © 2024- Frello Technology Private Limited
 
-import re
 import json
 import requests
 from typing import Optional, Dict, Any, Tuple, List
@@ -244,6 +243,7 @@ class Anthropic(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        **kwargs,
     ):
         return distributed_chat(
             self,
@@ -252,16 +252,5 @@ class Anthropic(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            **kwargs,
         )
-
-
-# helper methods
-
-
-def get_section(tag: str, out: str) -> Optional[str]:
-    pattern = re.compile("<" + tag + ">(.*?)</" + tag + ">", re.DOTALL)
-    match = pattern.search(out)
-    if match:
-        content = match.group(1)
-        return content
-    return None

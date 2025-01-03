@@ -199,6 +199,7 @@ class Groq(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        **kwargs,
     ):
         return distributed_chat(
             self,
@@ -207,4 +208,5 @@ class Groq(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            **kwargs,
         )

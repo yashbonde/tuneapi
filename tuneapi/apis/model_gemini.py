@@ -114,7 +114,7 @@ class Gemini(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=None,
@@ -150,7 +150,7 @@ class Gemini(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: float = 1,
         token: Optional[str] = None,
         timeout=(5, 60),
@@ -166,18 +166,12 @@ class Gemini(tt.ModelInterface):
         extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
+
         data = {
             "systemInstruction": {
                 "parts": [{"text": system}],
             },
             "contents": messages,
-            "generationConfig": {
-                "temperature": temperature,
-                "topK": 0,
-                "topP": 0.95,
-                "maxOutputTokens": max_tokens,
-                "stopSequences": [],
-            },
             "safetySettings": [
                 {
                     "category": "HARM_CATEGORY_HARASSMENT",
@@ -197,6 +191,22 @@ class Gemini(tt.ModelInterface):
                 },
             ],
         }
+
+        generation_config = {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens,
+            "stopSequences": [],
+        }
+
+        if chats.gen_schema:
+            generation_config.update(
+                {
+                    "response_mime_type": "application/json",
+                    "response_schema": chats.gen_schema,
+                }
+            )
+        data["generationConfig"] = generation_config
+
         if tools:
             data["tool_config"] = {
                 "function_calling_config": {
@@ -285,6 +295,7 @@ class Gemini(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        **kwargs,
     ):
         return distributed_chat(
             self,
@@ -293,4 +304,5 @@ class Gemini(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            **kwargs,
         )

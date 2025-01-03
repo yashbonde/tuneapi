@@ -3,7 +3,7 @@
 import queue
 import threading
 from tqdm import trange
-from typing import List, Optional
+from typing import List, Optional, Dict
 from dataclasses import dataclass
 
 from tuneapi.types import Thread, ModelInterface, human, system
@@ -16,6 +16,7 @@ def distributed_chat(
     max_threads: int = 10,
     retry: int = 3,
     pbar=True,
+    **kwargs,
 ):
     """
     Distributes multiple chat prompts across a thread pool for parallel processing.
@@ -78,8 +79,7 @@ def distributed_chat(
                     break
 
                 try:
-                    print(">")
-                    out = task.model.chat(task.prompt)
+                    out = task.model.chat(chat=task.prompt, **task.kwargs)
                     if post_logic:
                         out = post_logic(out)
                     result_channel.put(_Result(task.index, out, True))
@@ -94,7 +94,13 @@ def distributed_chat(
                         nm.set_api_token(model.api_token)
                         # Increment retry count and requeue
                         task_channel.put(
-                            _Task(task.index, nm, task.prompt, task.retry_count + 1)
+                            _Task(
+                                index=task.index,
+                                model=nm,
+                                prompt=task.prompt,
+                                retry_count=task.retry_count + 1,
+                                kwargs=task.kwargs,
+                            )
                         )
                     else:
                         # If we've exhausted retries, store the error
@@ -122,7 +128,15 @@ def distributed_chat(
             extra_headers=model.extra_headers,
         )
         nm.set_api_token(model.api_token)
-        task_channel.put(_Task(i, nm, p))
+        task_channel.put(
+            _Task(
+                index=i,
+                model=nm,
+                prompt=p,
+                retry_count=0,
+                kwargs=kwargs,
+            )
+        )
 
     # Process results
     completed = 0
@@ -160,6 +174,7 @@ class _Task:
     model: ModelInterface
     prompt: Thread
     retry_count: int = 0
+    kwargs: Optional[Dict] = None
 
 
 @dataclass

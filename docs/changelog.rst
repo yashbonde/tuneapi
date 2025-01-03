@@ -7,6 +7,22 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.6.3
+-----
+
+- ``<model>.distributed_chat`` now takes in args that are passed to the ``post_logic``.
+
+
+0.6.2
+-----
+
+- New set of utils in ``tuneapi.utils`` called ``prompt`` to help with the basics of prompting.
+
+0.6.1
+-----
+
+- Package now uses ``fire==0.7.0``
+
 0.6.0
 -----
 

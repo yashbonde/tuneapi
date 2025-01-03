@@ -346,6 +346,17 @@ class ModelInterface:
     ):
         """This is the main function to stream chat with the model where each token is iteratively generated"""
 
+    def distributed_chat(
+        self,
+        prompts: List["Thread"],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+        **kwargs,
+    ):
+        """This is the main function to chat with the model in a distributed manner"""
+
 
 ########################################################################################################################
 #
@@ -372,6 +383,7 @@ class Thread:
         id: str = "",
         title: str = "",
         tools: List[Tool] = [],
+        gen_schema: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
         self.chats = list(chats)
@@ -380,6 +392,7 @@ class Thread:
         self.id = id or "thread_" + str(tu.get_snowflake())
         self.title = title
         self.tools = tools
+        self.gen_schema = gen_schema
 
         #
         kwargs = {k: v for k, v in sorted(kwargs.items())}
@@ -462,6 +475,7 @@ class Thread:
                 "title": self.title,
                 "id": self.id,
                 "tools": [x.to_dict() for x in self.tools],
+                "gen_schema": self.gen_schema,
             }
         return {
             "chats": [x.to_dict() for x in self.chats],
@@ -484,6 +498,7 @@ class Thread:
             model=data.get("model", ""),
             title=data.get("title", ""),
             tools=[Tool.from_dict(x) for x in data.get("tools", [])],
+            gen_schema=data.get("gen_schema", {}),
             **data.get("meta", {}),
         )
 

@@ -45,6 +45,9 @@ from tuneapi.utils.parallel import (
     batched,
     threaded_map,
 )
+from tuneapi.utils.prompts import (
+    get_tagged_section,
+)
 from tuneapi.utils.randomness import (
     get_random_string,
     get_snowflake,

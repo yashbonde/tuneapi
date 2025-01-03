@@ -130,6 +130,7 @@ class Openai(tt.ModelInterface):
         extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
         raw: bool = False,
+        **kwargs,
     ):
         headers, messages = self._process_input(chats, token)
         extra_headers = extra_headers or self.extra_headers
@@ -148,6 +149,8 @@ class Openai(tt.ModelInterface):
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
             ]
             data["parallel_tool_calls"] = parallel_tool_calls
+        if kwargs:
+            data.update(kwargs)
         if debug:
             fp = "sample_oai.json"
             print("Saving at path " + fp)
@@ -198,6 +201,7 @@ class Openai(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        **kwargs,
     ):
         return distributed_chat(
             self,
@@ -206,6 +210,7 @@ class Openai(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            **kwargs,
         )
 
     def embedding(
