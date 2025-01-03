@@ -7,6 +7,12 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.7.0
+-----
+
+- All models now have ``<model>.distributed_chat_async`` that can be used in servers without blocking the main event
+  loop. This will give a much needed UX improvement to the entire system.
+
 0.6.3
 -----
 

@@ -4,13 +4,13 @@ Connect to the `TuneAI Proxy API <https://studio.tune.app/>`_ and use our standa
 
 # Copyright © 2024- Frello Technology Private Limited
 
-import json
+import httpx
 import requests
 from typing import Optional, Dict, Any, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
-from tuneapi.apis.turbo import distributed_chat
+from tuneapi.apis.turbo import distributed_chat, distributed_chat_async
 
 
 class TuneModel(tt.ModelInterface):
@@ -198,7 +198,7 @@ class TuneModel(tt.ModelInterface):
             line = line.decode().strip()
             if line:
                 try:
-                    delta = json.loads(line.replace("data: ", ""))["choices"][0][
+                    delta = tu.from_json(line.replace("data: ", ""))["choices"][0][
                         "delta"
                     ]
                     if "tool_calls" in delta:
@@ -219,6 +219,116 @@ class TuneModel(tt.ModelInterface):
             yield fn_call
         return
 
+    async def chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        token: Optional[str] = None,
+        timeout=(5, 60),
+        stop: Optional[List[str]] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> str | Dict[str, Any]:
+        output = ""
+        async for x in self.stream_chat_async(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            token=token,
+            timeout=timeout,
+            stop=stop,
+            extra_headers=extra_headers,
+            raw=False,
+            **kwargs,
+        ):
+            if isinstance(x, dict):
+                output = x
+            else:
+                output += x
+        return output
+
+    async def stream_chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        token: Optional[str] = None,
+        timeout=(5, 60),
+        stop: Optional[List[str]] = None,
+        raw: bool = False,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        model = model or self.model_id
+        if not model:
+            raise Exception(
+                "Tune Model ID not found. Please set TUNEAPI_MODEL environment variable or pass through function"
+            )
+        headers, messages = self._process_input(chats, token)
+        extra_headers = extra_headers or self.extra_headers
+        if extra_headers:
+            headers.update(extra_headers)
+        data = {
+            "temperature": temperature,
+            "messages": messages,
+            "model": model,
+            "stream": True,
+            "max_tokens": max_tokens,
+        }
+        if stop:
+            data["stop"] = stop
+        if isinstance(chats, tt.Thread) and len(chats.tools):
+            data["tools"] = [
+                {"type": "function", "function": x.to_dict()} for x in chats.tools
+            ]
+        if debug:
+            fp = "sample_tune.json"
+            tu.logger.info("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.base_url,
+                headers=headers,
+                json=data,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+
+            fn_call = None
+            async for line in response.aiter_lines():
+                if raw:
+                    yield line
+                    continue
+
+                line = line.strip()
+                if line:
+                    try:
+                        delta = tu.from_json(line.replace("data: ", ""))["choices"][0][
+                            "delta"
+                        ]
+                        if "tool_calls" in delta:
+                            y = delta["tool_calls"][0]["function"]
+                            if fn_call is None:
+                                fn_call = {
+                                    "name": y["name"],
+                                    "arguments": y.get("arguments", ""),
+                                }
+                            else:
+                                fn_call["arguments"] += y["arguments"]
+                        elif "content" in delta:
+                            yield delta["content"]
+                    except:
+                        break
+            if fn_call:
+                fn_call["arguments"] = tu.from_json(fn_call["arguments"])
+                yield fn_call
+            return
+
     def distributed_chat(
         self,
         prompts: List[tt.Thread],
@@ -226,6 +336,7 @@ class TuneModel(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        debug=False,
         **kwargs,
     ):
         return distributed_chat(
@@ -235,5 +346,27 @@ class TuneModel(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            debug=debug,
+            **kwargs,
+        )
+
+    async def distributed_chat_async(
+        self,
+        prompts: List[tt.Thread],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+        debug=False,
+        **kwargs,
+    ):
+        return await distributed_chat_async(
+            self,
+            prompts=prompts,
+            post_logic=post_logic,
+            max_threads=max_threads,
+            retry=retry,
+            pbar=pbar,
+            debug=debug,
             **kwargs,
         )

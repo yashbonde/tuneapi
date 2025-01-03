@@ -4,13 +4,13 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 
 # Copyright © 2024- Frello Technology Private Limited
 
-import json
+import httpx
 import requests
 from typing import Optional, Dict, Any, Tuple, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
-from tuneapi.apis.turbo import distributed_chat
+from tuneapi.apis.turbo import distributed_chat, distributed_chat_async
 
 
 class Anthropic(tt.ModelInterface):
@@ -203,7 +203,7 @@ class Anthropic(tt.ModelInterface):
 
             try:
                 # print(line)
-                resp = json.loads(line.replace("data:", "").strip())
+                resp = tu.from_json(line.replace("data:", "").strip())
                 if resp["type"] == "content_block_start":
                     if resp["content_block"]["type"] == "tool_use":
                         fn_call = {
@@ -229,12 +229,146 @@ class Anthropic(tt.ModelInterface):
                         fn_call["arguments"] += delta["partial_json"]
                 elif resp["type"] == "content_block_stop":
                     if fn_call:
-                        fn_call["arguments"] = json.loads(fn_call["arguments"] or "{}")
+                        fn_call["arguments"] = tu.from_json(
+                            fn_call["arguments"] or "{}"
+                        )
                         yield fn_call
                         fn_call = None
             except:
                 break
         return
+
+    async def chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        return_message: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ):
+        output = ""
+        fn_call = None
+        async for i in self.stream_chat_async(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            token=token,
+            extra_headers=extra_headers,
+            raw=False,
+            **kwargs,
+        ):
+            if isinstance(i, dict):
+                fn_call = i.copy()
+            else:
+                output += i
+        if return_message:
+            return output, fn_call
+        if fn_call:
+            return fn_call
+        return output
+
+    async def stream_chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        timeout=(5, 30),
+        raw: bool = False,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> Any:
+
+        tools = []
+        if isinstance(chats, tt.Thread):
+            tools = [x.to_dict() for x in chats.tools]
+            for t in tools:
+                t["input_schema"] = t.pop("parameters")
+        headers, system, claude_messages = self._process_input(chats=chats, token=token)
+        extra_headers = extra_headers or self.extra_headers
+        if extra_headers:
+            headers.update(extra_headers)
+
+        data = {
+            "model": model or self.model_id,
+            "max_tokens": max_tokens,
+            "messages": claude_messages,
+            "system": system,
+            "tools": tools,
+            "stream": True,
+        }
+        if temperature:
+            data["temperature"] = temperature
+        if kwargs:
+            data.update(kwargs)
+
+        if debug:
+            fp = "sample_anthropic.json"
+            print("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.base_url,
+                headers=headers,
+                json=data,
+                timeout=timeout,
+            )
+            try:
+                response.raise_for_status()
+            except Exception as e:
+                yield str(e)
+                return
+
+            async for chunk in response.aiter_bytes():
+                for line in chunk.decode("utf-8").splitlines():
+                    line = line.strip()
+                    if not line or not "data:" in line:
+                        continue
+
+                    try:
+                        # print(line)
+                        resp = tu.from_json(line.replace("data:", "").strip())
+                        if resp["type"] == "content_block_start":
+                            if resp["content_block"]["type"] == "tool_use":
+                                fn_call = {
+                                    "name": resp["content_block"]["name"],
+                                    "arguments": "",
+                                }
+                        elif resp["type"] == "content_block_delta":
+                            delta = resp["delta"]
+                            delta_type = delta["type"]
+                            if delta_type == "text_delta":
+                                if raw:
+                                    yield b"data: " + tu.to_json(
+                                        {
+                                            "object": delta_type,
+                                            "choices": [
+                                                {"delta": {"content": delta["text"]}}
+                                            ],
+                                        },
+                                        tight=True,
+                                    ).encode()
+                                    yield b""  # uncomment this line if you want 1:1 with OpenAI
+                                else:
+                                    yield delta["text"]
+                            elif delta_type == "input_json_delta":
+                                fn_call["arguments"] += delta["partial_json"]
+                        elif resp["type"] == "content_block_stop":
+                            if fn_call:
+                                fn_call["arguments"] = tu.from_json(
+                                    fn_call["arguments"] or "{}"
+                                )
+                                yield fn_call
+                                fn_call = None
+                    except:
+                        break
 
     def distributed_chat(
         self,
@@ -243,6 +377,7 @@ class Anthropic(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        debug=False,
         **kwargs,
     ):
         return distributed_chat(
@@ -252,5 +387,27 @@ class Anthropic(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            debug=debug,
+            **kwargs,
+        )
+
+    async def distributed_chat_async(
+        self,
+        prompts: List[tt.Thread],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+        debug=False,
+        **kwargs,
+    ):
+        return await distributed_chat_async(
+            self,
+            prompts=prompts,
+            post_logic=post_logic,
+            max_threads=max_threads,
+            retry=retry,
+            pbar=pbar,
+            debug=debug,
             **kwargs,
         )

@@ -194,6 +194,115 @@ class Mistral(tt.ModelInterface):
             yield fn_call
         return
 
+    async def chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        token: Optional[str] = None,
+        timeout=(5, 60),
+        stop: Optional[List[str]] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> str | Dict[str, Any]:
+        output = ""
+        async for x in self.stream_chat_async(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            token=token,
+            timeout=timeout,
+            stop=stop,
+            extra_headers=extra_headers,
+            raw=False,
+            **kwargs,
+        ):
+            if isinstance(x, dict):
+                output = x
+            else:
+                output += x
+        return output
+
+    async def stream_chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        token: Optional[str] = None,
+        timeout=(5, 60),
+        stop: Optional[List[str]] = None,
+        raw: bool = False,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        tools = []
+        if isinstance(chats, tt.Thread):
+            tools = [{"type": "function", "function": x.to_dict()} for x in chats.tools]
+        headers, messages = self._process_input(chats, token)
+        extra_headers = extra_headers or self.extra_headers
+        if extra_headers:
+            headers.update(extra_headers)
+        data = {
+            "messages": messages,
+            "model": model or self.model_id,
+            "stream": True,
+            "max_tokens": max_tokens,
+            "tools": tools,
+        }
+        if temperature:
+            data["temperature"] = temperature
+        if debug:
+            fp = "sample_mistral.json"
+            print("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
+
+        async with requests.post(
+            self.base_url,
+            headers=headers,
+            json=data,
+            stream=True,
+            timeout=timeout,
+        ) as response:
+            try:
+                response.raise_for_status()
+            except Exception as e:
+                yield response.text
+                raise e
+
+            fn_call = None
+            async for line in response.aiter_lines():
+                if raw:
+                    yield line
+                    continue
+
+                line = line.decode().strip()
+                if line:
+                    try:
+                        x = json.loads(line.replace("data: ", ""))["choices"][0][
+                            "delta"
+                        ]
+                        if "tool_calls" in x:
+                            y = x["tool_calls"][0]["function"]
+                            if fn_call is None:
+                                fn_call = {
+                                    "name": y["name"],
+                                    "arguments": y["arguments"],
+                                }
+                            else:
+                                fn_call["arguments"] += y["arguments"]
+                        elif "content" in x:
+                            c = x["content"]
+                            if c:
+                                yield c
+                    except:
+                        break
+            if fn_call:
+                fn_call["arguments"] = tu.from_json(fn_call["arguments"])
+                yield fn_call
+
     def distributed_chat(
         self,
         prompts: List[tt.Thread],
@@ -201,6 +310,7 @@ class Mistral(tt.ModelInterface):
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        debug=False,
         **kwargs,
     ):
         return distributed_chat(
@@ -210,5 +320,6 @@ class Mistral(tt.ModelInterface):
             max_threads=max_threads,
             retry=retry,
             pbar=pbar,
+            debug=debug,
             **kwargs,
         )

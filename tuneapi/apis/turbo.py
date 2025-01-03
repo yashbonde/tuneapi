@@ -1,12 +1,14 @@
 # Copyright © 2024- Frello Technology Private Limited
 
 import queue
+import asyncio
 import threading
 from tqdm import trange
 from typing import List, Optional, Dict
 from dataclasses import dataclass
 
 from tuneapi.types import Thread, ModelInterface, human, system
+from tuneapi.utils import logger
 
 
 def distributed_chat(
@@ -16,6 +18,7 @@ def distributed_chat(
     max_threads: int = 10,
     retry: int = 3,
     pbar=True,
+    debug=False,
     **kwargs,
 ):
     """
@@ -79,7 +82,7 @@ def distributed_chat(
                     break
 
                 try:
-                    out = task.model.chat(chat=task.prompt, **task.kwargs)
+                    out = task.model.chat(chats=task.prompt, **task.kwargs)
                     if post_logic:
                         out = post_logic(out)
                     result_channel.put(_Result(task.index, out, True))
@@ -116,6 +119,9 @@ def distributed_chat(
         t = threading.Thread(target=worker)
         t.start()
         workers.append(t)
+
+    if debug:
+        logger.info(f"Processing {len(prompts)} prompts with {max_threads} workers")
 
     # Initialize progress bar
     _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
@@ -156,6 +162,74 @@ def distributed_chat(
         task_channel.put(None)  # Send poison pills
     for w in workers:
         w.join()
+
+    if _pbar:
+        _pbar.close()
+
+    return results
+
+
+async def distributed_chat_async(
+    model: ModelInterface,
+    prompts: List[Thread],
+    post_logic: Optional[callable] = None,
+    max_threads: int = 10,
+    retry: int = 3,
+    pbar=True,
+    debug=False,
+    **kwargs,
+):
+    results = [None for _ in range(len(prompts))]
+
+    async def process_prompt(index, prompt, retry_count=0):
+        try:
+            out = await model.chat_async(chats=prompt, **kwargs)
+            if post_logic:
+                out = post_logic(out)
+            return (index, out, True)
+        except Exception as e:
+            if retry_count < retry:
+                # create new async model
+                nm = model.__class__(
+                    id=model.model_id,
+                    base_url=model.base_url,
+                    extra_headers=model.extra_headers,
+                )
+                nm.set_api_token(model.api_token)
+
+                return await process_prompt(index, prompt, retry_count + 1)
+            else:
+                return (index, None, False, e)
+
+    # Run all tasks concurrently using asyncio.gather
+    tasks = []
+    for i, prompt in enumerate(prompts):
+        nm = model.__class__(
+            id=model.model_id,
+            base_url=model.base_url,
+            extra_headers=model.extra_headers,
+        )
+        nm.set_api_token(model.api_token)
+        tasks.append(process_prompt(i, prompt))
+
+    if debug:
+        logger.info(f"Processing {len(prompts)} prompts with {max_threads} workers")
+
+    _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
+
+    results_from_gather = await asyncio.gather(*tasks)
+
+    # Process results
+    for r in results_from_gather:
+        index, data, success, *error = r
+
+        if success:
+            results[index] = data
+        else:
+            results[index] = error[0] if error else None
+
+        if _pbar:
+            _pbar.update(1)
 
     if _pbar:
         _pbar.close()

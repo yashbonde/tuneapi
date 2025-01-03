@@ -346,6 +346,30 @@ class ModelInterface:
     ):
         """This is the main function to stream chat with the model where each token is iteratively generated"""
 
+    async def chat_async(
+        chats: "Thread",
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 1,
+        token: Optional[str] = None,
+        timeout=(5, 30),
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> str | Dict[str, Any]:
+        """This is the async function to block chat with the model"""
+
+    async def stream_chat_async(
+        chats: "Thread",
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 1,
+        token: Optional[str] = None,
+        timeout=(5, 30),
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> str | Dict[str, Any]:
+        """This is the async function to stream chat with the model where each token is iteratively generated"""
+
     def distributed_chat(
         self,
         prompts: List["Thread"],
