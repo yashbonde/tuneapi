@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any, Tuple, List
 import tuneapi.utils as tu
 import tuneapi.types as tt
 from tuneapi.apis.turbo import distributed_chat
+from tuneapi.apis.model_openai import Openai as _Openai
 
 
 class Mistral(tt.ModelInterface):

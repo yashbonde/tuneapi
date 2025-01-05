@@ -17,6 +17,7 @@ import copy
 import random
 from PIL.Image import Image
 from functools import partial
+from pydantic import BaseModel
 from collections.abc import Iterable
 from typing import Dict, List, Any, Tuple, Optional, Generator, Union
 import nutree as nt
@@ -330,7 +331,7 @@ class ModelInterface:
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
-        """This is the main function to block chat with the model"""
+        """This is the blocking function to block chat with the model"""
 
     def stream_chat(
         self,
@@ -344,7 +345,7 @@ class ModelInterface:
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
     ):
-        """This is the main function to stream chat with the model where each token is iteratively generated"""
+        """This is the blocking function to stream chat with the model where each token is iteratively generated"""
 
     async def chat_async(
         chats: "Thread",
@@ -379,7 +380,18 @@ class ModelInterface:
         pbar=True,
         **kwargs,
     ):
-        """This is the main function to chat with the model in a distributed manner"""
+        """This is the blocking function to chat with the model in a distributed manner"""
+
+    async def distributed_chat_async(
+        self,
+        prompts: List["Thread"],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+        **kwargs,
+    ):
+        """This is the async function to chat with the model in a distributed manner"""
 
 
 ########################################################################################################################
@@ -396,7 +408,6 @@ class Thread:
 
     Args:
         *chats: List of chat ``Message`` objects
-        evals: JSON logic and
     """
 
     def __init__(
@@ -407,7 +418,7 @@ class Thread:
         id: str = "",
         title: str = "",
         tools: List[Tool] = [],
-        gen_schema: Optional[Dict[str, Any]] = None,
+        schema: Optional[BaseModel] = None,
         **kwargs,
     ):
         self.chats = list(chats)
@@ -416,7 +427,7 @@ class Thread:
         self.id = id or "thread_" + str(tu.get_snowflake())
         self.title = title
         self.tools = tools
-        self.gen_schema = gen_schema
+        self.schema = schema
 
         #
         kwargs = {k: v for k, v in sorted(kwargs.items())}
@@ -499,7 +510,7 @@ class Thread:
                 "title": self.title,
                 "id": self.id,
                 "tools": [x.to_dict() for x in self.tools],
-                "gen_schema": self.gen_schema,
+                "schema": self.schema,
             }
         return {
             "chats": [x.to_dict() for x in self.chats],
@@ -522,7 +533,7 @@ class Thread:
             model=data.get("model", ""),
             title=data.get("title", ""),
             tools=[Tool.from_dict(x) for x in data.get("tools", [])],
-            gen_schema=data.get("gen_schema", {}),
+            schema=data.get("schema", {}),
             **data.get("meta", {}),
         )
 

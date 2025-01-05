@@ -7,6 +7,7 @@ Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs
 import json
 import httpx
 import requests
+from pydantic import BaseModel
 
 from typing import Optional, Any, List, Dict
 
@@ -102,21 +103,29 @@ class Openai(tt.ModelInterface):
         **kwargs,
     ) -> Any:
         output = ""
-        for x in self.stream_chat(
-            chats=chats,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            parallel_tool_calls=parallel_tool_calls,
-            token=token,
-            extra_headers=extra_headers,
-            raw=False,
-            **kwargs,
-        ):
-            if isinstance(x, dict):
-                output = x
-            else:
-                output += x
+        try:
+            for x in self.stream_chat(
+                chats=chats,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                parallel_tool_calls=parallel_tool_calls,
+                token=token,
+                extra_headers=extra_headers,
+                raw=False,
+                **kwargs,
+            ):
+                if isinstance(x, dict):
+                    output = x
+                else:
+                    output += x
+        except requests.HTTPError as e:
+            print(e.response.text)
+            raise e
+
+        if chats.schema:
+            output = chats.schema(**tu.from_json(output))
+            return output
         return output
 
     def stream_chat(
@@ -150,6 +159,15 @@ class Openai(tt.ModelInterface):
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
             ]
             data["parallel_tool_calls"] = parallel_tool_calls
+        if chats.schema:
+            data["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": chats.schema.model_json_schema(),
+                    "name": "chat",
+                },
+            }
+
         if kwargs:
             data.update(kwargs)
         if debug:

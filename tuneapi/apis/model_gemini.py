@@ -7,7 +7,8 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 
 import httpx
 import requests
-from typing import Optional, Any, Dict, List
+from pydantic import BaseModel
+from typing import get_args, get_origin, List, Optional, Dict, Any, Union
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -110,6 +111,106 @@ class Gemini(tt.ModelInterface):
             "Content-Type": "application/json",
         }
 
+    @staticmethod
+    def get_structured_schema(model: type[BaseModel]) -> Dict[str, Any]:
+        """
+        Converts a Pydantic BaseModel to a JSON schema compatible with Gemini API,
+        including `anyOf` for optional or union types and handling nested structures correctly.
+
+        Args:
+            model: The Pydantic BaseModel class to convert.
+
+        Returns:
+            A dictionary representing the JSON schema.
+        """
+
+        def _process_field(
+            field_name: str, field_type: Any, field_description: str = None
+        ) -> dict:
+            """Helper function to process a single field."""
+            schema = {}
+            origin = get_origin(field_type)
+            args = get_args(field_type)
+
+            if origin is list:
+                schema["type"] = "array"
+                if args:
+                    item_schema = _process_field_type(args[0])
+                    schema["items"] = item_schema
+                    if "type" not in item_schema and "anyOf" not in item_schema:
+                        schema["items"]["type"] = "object"  # default item type for list
+                else:
+                    schema["items"] = {}
+            elif origin is Optional:
+                if args:
+                    inner_schema = _process_field_type(args[0])
+                    schema["anyOf"] = [inner_schema, {"type": "null"}]
+                else:
+                    schema = {"type": "null"}
+            elif origin is dict:
+                schema["type"] = "object"
+                if len(args) == 2:
+                    schema["additionalProperties"] = _process_field_type(args[1])
+            else:
+                schema = _process_field_type(field_type)
+
+            if field_description:
+                schema["description"] = field_description
+            return schema
+
+        def _process_field_type(field_type: Any) -> dict:
+            """Helper function to process the type of a field."""
+
+            origin = get_origin(field_type)
+            args = get_args(field_type)
+
+            if field_type is str:
+                return {"type": "string"}
+            elif field_type is int:
+                return {"type": "integer"}
+            elif field_type is float:
+                return {"type": "number"}
+            elif field_type is bool:
+                return {"type": "boolean"}
+            elif isinstance(field_type, type) and issubclass(field_type, BaseModel):
+                return Gemini.get_structured_schema(
+                    field_type
+                )  # Recursive call for nested models
+            elif origin is list:
+                schema = {"type": "array"}
+                if args:
+                    item_schema = _process_field_type(args[0])
+                    schema["items"] = item_schema
+                    if "type" not in item_schema and "anyOf" not in item_schema:
+                        schema["items"]["type"] = "object"
+                return schema
+            elif origin is Optional:
+                return _process_field_type(args[0])
+            elif origin is dict:
+                schema = {"type": "object"}
+                if len(args) == 2:
+                    schema["additionalProperties"] = _process_field_type(args[1])
+                return schema
+            elif origin is Union:
+                return _process_field_type(args[0])
+            else:
+                return {"type": "string"}  # default any object to string
+
+        schema = {"type": "object", "properties": {}, "required": []}
+
+        for field_name, field in model.model_fields.items():
+            field_description = field.description
+            if field.is_required():
+                schema["required"].append(field_name)
+
+            schema["properties"][field_name] = _process_field(
+                field_name, field.annotation, field_description
+            )
+
+        if model.__doc__:
+            schema["description"] = model.__doc__.strip()
+        return schema
+
     def chat(
         self,
         chats: tt.Thread | str,
@@ -139,11 +240,13 @@ class Gemini(tt.ModelInterface):
                     output = x
                 else:
                     output += x
-        except Exception as e:
-            if not x:
-                raise e
-            else:
-                raise ValueError(x)
+        except requests.HTTPError as e:
+            print(e.response.text)
+            raise e
+
+        if chats.schema:
+            output = chats.schema(**tu.from_json(output))
+            return output
         return output
 
     def stream_chat(
@@ -198,11 +301,11 @@ class Gemini(tt.ModelInterface):
             "stopSequences": [],
         }
 
-        if chats.gen_schema:
+        if chats.schema:
             generation_config.update(
                 {
                     "response_mime_type": "application/json",
-                    "response_schema": chats.gen_schema,
+                    "response_schema": self.get_structured_schema(chats.schema),
                 }
             )
         data["generationConfig"] = generation_config
@@ -376,11 +479,11 @@ class Gemini(tt.ModelInterface):
             "stopSequences": [],
         }
 
-        if chats.gen_schema:
+        if chats.schema:
             generation_config.update(
                 {
                     "response_mime_type": "application/json",
-                    "response_schema": chats.gen_schema,
+                    "response_schema": chats.schema,
                 }
             )
         data["generationConfig"] = generation_config

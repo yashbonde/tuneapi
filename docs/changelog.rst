@@ -7,6 +7,56 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.7.1
+-----
+
+- Add structured genration support for Gemini and OpenAI APIs. You can jsut pass ``schema`` to ``Thread``. ``model.chat``
+  will take care of it automatically. Here's an example:
+
+  .. code-block:: python
+
+      from tuneapi import tt, ta
+      from pydantic import BaseModel
+      from typing import List, Optional, Dict, Any
+
+      class MedicalRecord(BaseModel):
+          date: str
+          diagnosis: str
+          treatment: str
+
+      class Dog(BaseModel):
+          name: str
+          breed: str
+          records: Optional[List[MedicalRecord]] = None
+
+      class Dogs(BaseModel):
+          dogs: List[Dog]
+
+      model = ta.Gemini()
+      out: Dogs = model.chat(tt.Thread(
+          tt.human("""
+              At the Sunny Paws Animal Clinic, we keep detailed records of all our furry patients. Today, we saw a few dogs.
+              There was 'Buddy,' a golden retriever, who visited on '2023-10-26' and was diagnosed with a 'mild ear infection,'
+              which we treated with 'ear drops.' Then, there was 'Luna,' a playful beagle, who came in on '2023-10-25' for a
+              'routine check-up,' and no treatment was needed, but we also had her back on '2023-10-28' with a 'upset tummy'
+              which we treated with 'bland diet and probiotics.' Finally, a third dog named 'Rocky', a small terrier mix,
+              showed up on '2023-10-29' with a small 'cut on his paw,' we cleaned it and used an 'antibiotic ointment'. We
+              also have 'Daisy,' a fluffy poodle, who doesn't have any medical records yet, thankfully!
+          """),
+          schema=Dogs,
+      ))
+
+      for dog in out.dogs:
+          print(f"Dog: {dog.name}, Breed: {dog.breed}")
+          if dog.records:
+              for record in dog.records:
+                  print(f"  Date: {record.date}, Diagnosis: {record.diagnosis}, Treatment: {record.treatment}")
+          else:
+              print("  No medical records on file.")
+          print()
+
+- Add ``pydantic`` as a dependency in the package.
+
 0.7.0
 -----
 

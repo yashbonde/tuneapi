@@ -189,14 +189,6 @@ async def distributed_chat_async(
             return (index, out, True)
         except Exception as e:
             if retry_count < retry:
-                # create new async model
-                nm = model.__class__(
-                    id=model.model_id,
-                    base_url=model.base_url,
-                    extra_headers=model.extra_headers,
-                )
-                nm.set_api_token(model.api_token)
-
                 return await process_prompt(index, prompt, retry_count + 1)
             else:
                 return (index, None, False, e)
@@ -204,12 +196,6 @@ async def distributed_chat_async(
     # Run all tasks concurrently using asyncio.gather
     tasks = []
     for i, prompt in enumerate(prompts):
-        nm = model.__class__(
-            id=model.model_id,
-            base_url=model.base_url,
-            extra_headers=model.extra_headers,
-        )
-        nm.set_api_token(model.api_token)
         tasks.append(process_prompt(i, prompt))
 
     if debug:
