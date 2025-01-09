@@ -316,10 +316,6 @@ class ModelInterface:
         """This are used to set the API token for the model"""
         raise NotImplementedError("This model has no operation for this.")
 
-    def set_org_id(self, org_id: str) -> None:
-        """This are used to set the Organisation ID for the model"""
-        raise NotImplementedError("This model has no operation for this.")
-
     def chat(
         self,
         chats: "Thread",
@@ -634,7 +630,7 @@ class ThreadsTree:
         self.system = system
         self.msg_counter = 0  # monotonically increasing counter
         self.messages_map = {}
-        self.messages = {}
+        self.messages: Dict[str, Message] = {}
 
         self.tree = nt.Tree()
         if msgs:
@@ -697,9 +693,9 @@ class ThreadsTree:
     @property
     def latest_node(self) -> nt.Node:
         done = False
-        cntr = copy.deepcopy(self.msg_counter)
-        if not cntr:
+        if not self.msg_counter:
             return self.tree
+        cntr = copy.deepcopy(self.msg_counter)
         while not done:
             try:
                 return self.tree.find(data_id=self.messages_map[cntr - 1])
@@ -785,6 +781,7 @@ class ThreadsTree:
             to = self[to]
             node = self.tree.find(data_id=to.id)
 
+        print("******", node, child)
         self._add_children_to_parent(node, [child])
         return self
 

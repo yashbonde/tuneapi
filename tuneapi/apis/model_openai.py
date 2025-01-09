@@ -2,9 +2,8 @@
 Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs.
 """
 
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
-import json
 import httpx
 import requests
 from pydantic import BaseModel
@@ -31,7 +30,24 @@ class Openai(tt.ModelInterface):
     def set_api_token(self, token: str) -> None:
         self.api_token = token
 
-    def _process_input(self, chats, token: Optional[str] = None):
+    def _process_header(self, token: Optional[str] = None):
+        return {
+            "Authorization": "Bearer " + (token or self.api_token),
+            "Content-Type": "application/json",
+        }
+
+    def _process_input(
+        self,
+        chats,
+        model: Optional[str] = None,
+        max_tokens: int = None,
+        temperature: float = 1,
+        parallel_tool_calls: bool = False,
+        token: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        **kwargs,
+    ):
         if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "OpenAI API key not found. Please set OPENAI_TOKEN environment variable or pass through function"
@@ -49,9 +65,25 @@ class Openai(tt.ModelInterface):
             if m.role == tt.Message.SYSTEM:
                 final_messages.append({"role": "system", "content": m.value})
             elif m.role == tt.Message.HUMAN:
-                final_messages.append({"role": "user", "content": m.value})
+                content = [{"type": "text", "text": m.value}]
+                for img in m.images:
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{img}"},
+                        }
+                    )
+                final_messages.append({"role": "user", "content": content})
             elif m.role == tt.Message.GPT:
-                final_messages.append({"role": "assistant", "content": m.value})
+                content = [{"type": "text", "text": m.value}]
+                for img in m.images:
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{img}"},
+                        }
+                    )
+                final_messages.append({"role": "assistant", "content": content})
             elif m.role == tt.Message.FUNCTION_CALL:
                 _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 final_messages.append(
@@ -83,13 +115,74 @@ class Openai(tt.ModelInterface):
                 raise Exception(f"Invalid message role: {m.role}")
 
         headers = self._process_header(token)
-        return headers, final_messages
+        # return headers, final_messages
 
-    def _process_header(self, token: Optional[str] = None):
-        return {
-            "Authorization": "Bearer " + (token or self.api_token),
-            "Content-Type": "application/json",
+        extra_headers = extra_headers or self.extra_headers
+        if extra_headers:
+            headers.update(extra_headers)
+        data = {
+            "temperature": temperature,
+            "messages": final_messages,
+            "model": model or self.model_id,
+            "stream": True,
         }
+        if max_tokens:
+            data["max_tokens"] = max_tokens
+        if isinstance(chats, tt.Thread) and len(chats.tools):
+            data["tools"] = [
+                {"type": "function", "function": x.to_dict()} for x in chats.tools
+            ]
+            data["parallel_tool_calls"] = parallel_tool_calls
+        if isinstance(chats, tt.Thread) and chats.schema:
+            data["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": chats.schema.model_json_schema(),
+                    "name": "chat",
+                },
+            }
+
+        if kwargs:
+            data.update(kwargs)
+
+        if debug:
+            fp = "sample_oai.json"
+            print("Saving at path " + fp)
+            tu.to_json(data, fp=fp)
+
+        return headers, data
+
+    def _process_output(self, raw: bool, lines_fn: callable):
+        fn_call = None
+        for line in lines_fn():
+            if isinstance(line, bytes):
+                line = line.decode("utf-8")
+            if raw:
+                yield line
+                continue
+
+            line = line.strip()
+            if line:
+                try:
+                    x = tu.from_json(line.replace("data: ", ""))["choices"][0]["delta"]
+                    if "tool_calls" not in x:
+                        yield x["content"]
+                    else:
+                        y = x["tool_calls"][0]["function"]
+                        if fn_call is None:
+                            fn_call = {
+                                "name": y["name"],
+                                "arguments": y["arguments"],
+                            }
+                        else:
+                            fn_call["arguments"] += y["arguments"]
+                except:
+                    break
+        if fn_call:
+            fn_call["arguments"] = tu.from_json(fn_call["arguments"])
+            yield fn_call
+
+    # Interface methods
 
     def chat(
         self,
@@ -123,7 +216,7 @@ class Openai(tt.ModelInterface):
             print(e.response.text)
             raise e
 
-        if chats.schema:
+        if isinstance(chats, tt.Thread) and chats.schema:
             output = chats.schema(**tu.from_json(output))
             return output
         return output
@@ -142,39 +235,17 @@ class Openai(tt.ModelInterface):
         raw: bool = False,
         **kwargs,
     ):
-        headers, messages = self._process_input(chats, token)
-        extra_headers = extra_headers or self.extra_headers
-        if extra_headers:
-            headers.update(extra_headers)
-        data = {
-            "temperature": temperature,
-            "messages": messages,
-            "model": model or self.model_id,
-            "stream": True,
-        }
-        if max_tokens:
-            data["max_tokens"] = max_tokens
-        if isinstance(chats, tt.Thread) and len(chats.tools):
-            data["tools"] = [
-                {"type": "function", "function": x.to_dict()} for x in chats.tools
-            ]
-            data["parallel_tool_calls"] = parallel_tool_calls
-        if chats.schema:
-            data["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "schema": chats.schema.model_json_schema(),
-                    "name": "chat",
-                },
-            }
-
-        if kwargs:
-            data.update(kwargs)
-        if debug:
-            fp = "sample_oai.json"
-            print("Saving at path " + fp)
-            tu.to_json(data, fp=fp)
-
+        headers, data = self._process_input(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            parallel_tool_calls=parallel_tool_calls,
+            token=token,
+            extra_headers=extra_headers,
+            debug=debug,
+            **kwargs,
+        )
         response = requests.post(
             self.base_url,
             headers=headers,
@@ -188,30 +259,7 @@ class Openai(tt.ModelInterface):
             yield response.text
             raise e
 
-        fn_call = None
-        for line in response.iter_lines():
-            if raw:
-                yield line
-                continue
-
-            line = line.decode().strip()
-            if line:
-                try:
-                    x = json.loads(line.replace("data: ", ""))["choices"][0]["delta"]
-                    if "tool_calls" not in x:
-                        yield x["content"]
-                    else:
-                        y = x["tool_calls"][0]["function"]
-                        if fn_call is None:
-                            fn_call = {"name": y["name"], "arguments": y["arguments"]}
-                        else:
-                            fn_call["arguments"] += y["arguments"]
-                except:
-                    break
-        if fn_call:
-            fn_call["arguments"] = tu.from_json(fn_call["arguments"])
-            yield fn_call
-        return
+        yield from self._process_output(raw, response.iter_lines)
 
     async def chat_async(
         self,
@@ -240,6 +288,9 @@ class Openai(tt.ModelInterface):
                 output = x
             else:
                 output += x
+        if isinstance(chats, tt.Thread) and chats.schema:
+            output = chats.schema(**tu.from_json(output))
+            return output
         return output
 
     async def stream_chat_async(
@@ -256,74 +307,36 @@ class Openai(tt.ModelInterface):
         raw: bool = False,
         **kwargs,
     ):
-        headers, messages = self._process_input(chats, token)
-        extra_headers = extra_headers or self.extra_headers
-        if extra_headers:
-            headers.update(extra_headers)
-        data = {
-            "temperature": temperature,
-            "messages": messages,
-            "model": model or self.model_id,
-            "stream": True,
-        }
-        if max_tokens:
-            data["max_tokens"] = max_tokens
-        if isinstance(chats, tt.Thread) and len(chats.tools):
-            data["tools"] = [
-                {"type": "function", "function": x.to_dict()} for x in chats.tools
-            ]
-            data["parallel_tool_calls"] = parallel_tool_calls
-        if kwargs:
-            data.update(kwargs)
-        if debug:
-            fp = "sample_oai.json"
-            print("Saving at path " + fp)
-            tu.to_json(data, fp=fp)
+        headers, data = self._process_input(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            parallel_tool_calls=parallel_tool_calls,
+            token=token,
+            extra_headers=extra_headers,
+            debug=debug,
+            **kwargs,
+        )
 
         async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.base_url,
+                headers=headers,
+                json=data,
+                timeout=timeout,
+            )
             try:
-                response = await client.post(
-                    self.base_url,
-                    headers=headers,
-                    json=data,
-                    timeout=timeout,
-                )
                 response.raise_for_status()
             except Exception as e:
-                yield str(e)
-                return
+                yield response.text
+                raise e
 
-            fn_call = None
             async for chunk in response.aiter_bytes():
-                for line in chunk.decode("utf-8").splitlines():
-                    if raw:
-                        yield line
-                        continue
-
-                    line = line.strip()
-                    if line.startswith("data: "):
-                        line = line[6:]
-                    if line:
-                        try:
-                            x = json.loads(line)["choices"][0]["delta"]
-                            if "tool_calls" not in x:
-                                yield x["content"]
-                            else:
-                                y = x["tool_calls"][0]["function"]
-                                if fn_call is None:
-                                    fn_call = {
-                                        "name": y["name"],
-                                        "arguments": y["arguments"],
-                                    }
-                                else:
-                                    fn_call["arguments"] += y["arguments"]
-                        except:
-                            break
-            if fn_call:
-                fn_call["arguments"] = tu.from_json(fn_call["arguments"])
-                yield fn_call
-
-    # Distributed chat functionalities
+                for x in self._process_output(
+                    raw=raw, lines_fn=chunk.decode("utf-8").splitlines
+                ):
+                    yield x
 
     def distributed_chat(
         self,

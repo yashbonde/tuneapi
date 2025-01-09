@@ -2,7 +2,7 @@
 Connect to the `TuneAI Proxy API <https://studio.tune.app/>`_ and use our standard endpoint for AI.
 """
 
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 import httpx
 import requests
@@ -39,9 +39,6 @@ class TuneModel(tt.ModelInterface):
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
-
-    def set_org_id(self, org_id: str) -> None:
-        self.org_id = org_id
 
     def _process_input(self, chats, token: Optional[str] = None):
         if not token and not self.api_token:  # type: ignore
@@ -112,7 +109,6 @@ class TuneModel(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
@@ -124,7 +120,6 @@ class TuneModel(tt.ModelInterface):
             temperature=temperature,
             token=token,
             timeout=timeout,
-            stop=stop,
             extra_headers=extra_headers,
             raw=False,
             **kwargs,
@@ -143,7 +138,6 @@ class TuneModel(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
@@ -164,8 +158,6 @@ class TuneModel(tt.ModelInterface):
             "stream": True,
             "max_tokens": max_tokens,
         }
-        if stop:
-            data["stop"] = stop
         if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
@@ -227,7 +219,6 @@ class TuneModel(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
@@ -239,7 +230,6 @@ class TuneModel(tt.ModelInterface):
             temperature=temperature,
             token=token,
             timeout=timeout,
-            stop=stop,
             extra_headers=extra_headers,
             raw=False,
             **kwargs,
@@ -258,7 +248,6 @@ class TuneModel(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
@@ -279,8 +268,6 @@ class TuneModel(tt.ModelInterface):
             "stream": True,
             "max_tokens": max_tokens,
         }
-        if stop:
-            data["stop"] = stop
         if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools

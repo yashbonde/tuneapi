@@ -3,7 +3,7 @@ Use the `Threads API <https://studio.tune.app/docs/concepts/threads>`_ for manag
 platform.
 """
 
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 from functools import cache
 from typing import Optional, List

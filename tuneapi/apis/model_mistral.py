@@ -2,9 +2,9 @@
 Connect to the `Mistral API <https://console.mistral.ai/>`_ and use their LLMs.
 """
 
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
-import json
+import httpx
 import requests
 from typing import Optional, Dict, Any, Tuple, List
 
@@ -177,7 +177,7 @@ class Mistral(tt.ModelInterface):
             line = line.decode().strip()
             if line:
                 try:
-                    x = json.loads(line.replace("data: ", ""))["choices"][0]["delta"]
+                    x = tu.from_json(line.replace("data: ", ""))["choices"][0]["delta"]
                     if "tool_calls" in x:
                         y = x["tool_calls"][0]["function"]
                         if fn_call is None:
@@ -203,7 +203,6 @@ class Mistral(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
@@ -215,7 +214,6 @@ class Mistral(tt.ModelInterface):
             temperature=temperature,
             token=token,
             timeout=timeout,
-            stop=stop,
             extra_headers=extra_headers,
             raw=False,
             **kwargs,
@@ -234,7 +232,6 @@ class Mistral(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
@@ -260,13 +257,13 @@ class Mistral(tt.ModelInterface):
             print("Saving at path " + fp)
             tu.to_json(data, fp=fp)
 
-        async with requests.post(
-            self.base_url,
-            headers=headers,
-            json=data,
-            stream=True,
-            timeout=timeout,
-        ) as response:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.base_url,
+                headers=headers,
+                json=data,
+                timeout=timeout,
+            )
             try:
                 response.raise_for_status()
             except Exception as e:
@@ -279,10 +276,10 @@ class Mistral(tt.ModelInterface):
                     yield line
                     continue
 
-                line = line.decode().strip()
+                line = line.strip()
                 if line:
                     try:
-                        x = json.loads(line.replace("data: ", ""))["choices"][0][
+                        x = tu.from_json(line.replace("data: ", ""))["choices"][0][
                             "delta"
                         ]
                         if "tool_calls" in x:

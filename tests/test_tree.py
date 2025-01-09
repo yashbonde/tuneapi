@@ -1,4 +1,4 @@
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 import tuneapi.types as tt
 
@@ -24,7 +24,9 @@ def get_tree() -> tt.ThreadsTree:
                                 "```<function ... you go.",
                                 fn_pairs=[
                                     (
-                                        tt.function_call("{list_tools: arguments"),
+                                        tt.function_call(
+                                            {"name": "list_tools", "arguments": "{}"}
+                                        ),
                                         tt.function_resp("{...}"),
                                     )
                                 ],
@@ -46,7 +48,9 @@ def get_tree() -> tt.ThreadsTree:
                                 "```<function ... @apple.com] sent!",
                                 fn_pairs=[
                                     (
-                                        tt.function_call("{send_email: arguments"),
+                                        tt.function_call(
+                                            {"name": "send_email", "arguments": "{}"}
+                                        ),
                                         tt.function_resp("{...}"),
                                     )
                                 ],

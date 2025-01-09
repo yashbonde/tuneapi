@@ -7,6 +7,22 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.7.3
+-----
+
+- Fix bug in image modality for Gemini
+- Fix bug in structured generation for OpenAI by setting ``strict=True`` in the API.
+- Fix bug in structured generation for Gemini
+- Abstracted making input structure for ``Anthropic``, ``OpenAI`` and ``Gemini`` using ``_process_input`` method
+- Abstracted outputs for ``Anthropic``, ``OpenAI`` and ``Gemini`` using ``_process_output`` method
+
+
+0.7.2
+-----
+
+- Add image modality for Gemini and OpenAI to complement Anthropic.
+
+
 0.7.1
 -----
 

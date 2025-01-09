@@ -2,7 +2,7 @@
 Connect to the `Groq API <https://console.groq.com/>`_ to experience the speed of their LPUs.
 """
 
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 import httpx
 import requests
@@ -200,7 +200,6 @@ class Groq(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
@@ -212,7 +211,6 @@ class Groq(tt.ModelInterface):
             temperature=temperature,
             token=token,
             timeout=timeout,
-            stop=stop,
             extra_headers=extra_headers,
             raw=False,
             **kwargs,
@@ -231,7 +229,6 @@ class Groq(tt.ModelInterface):
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,

@@ -1,4 +1,4 @@
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 from tuneapi.types import Thread, ModelInterface, human, system
 from tuneapi.utils import from_json

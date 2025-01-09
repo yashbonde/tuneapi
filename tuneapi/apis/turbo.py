@@ -1,4 +1,4 @@
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 import queue
 import asyncio

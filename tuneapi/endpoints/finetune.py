@@ -2,7 +2,7 @@
 Use the `Threads API <https://studio.tune.app/docs/concepts/finetuning>`_ for training models on the Tune AI platform.
 """
 
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 
 import os
 import requests

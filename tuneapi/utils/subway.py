@@ -1,4 +1,4 @@
-# Copyright © 2024- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
 # REMEMBER: nothing from outside tune should be imported in utils
 
 from requests import Session
