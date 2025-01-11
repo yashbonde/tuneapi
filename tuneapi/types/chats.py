@@ -12,15 +12,17 @@ Almost all the classes contain ``to_dict`` and ``from_dict`` for serialisation a
 
 import io
 import os
+import re
 import json
 import copy
 import random
+import nutree as nt
 from PIL.Image import Image
 from functools import partial
-from pydantic import BaseModel
 from collections.abc import Iterable
+from pydantic import BaseModel, Field
+from PIL.Image import Image as ImageType
 from typing import Dict, List, Any, Tuple, Optional, Generator, Union
-import nutree as nt
 
 import tuneapi.utils as tu
 
@@ -316,18 +318,7 @@ class ModelInterface:
         """This are used to set the API token for the model"""
         raise NotImplementedError("This model has no operation for this.")
 
-    def chat(
-        self,
-        chats: "Thread",
-        model: Optional[str] = None,
-        max_tokens: int = 1024,
-        temperature: float = 1,
-        token: Optional[str] = None,
-        timeout=(5, 30),
-        extra_headers: Optional[Dict[str, str]] = None,
-        **kwargs,
-    ) -> str | Dict[str, Any]:
-        """This is the blocking function to block chat with the model"""
+    # Chat methods
 
     def stream_chat(
         self,
@@ -342,8 +333,10 @@ class ModelInterface:
         extra_headers: Optional[Dict[str, str]] = None,
     ):
         """This is the blocking function to stream chat with the model where each token is iteratively generated"""
+        raise NotImplementedError("This model has no operation for this.")
 
-    async def chat_async(
+    def chat(
+        self,
         chats: "Thread",
         model: Optional[str] = None,
         max_tokens: int = 1024,
@@ -353,9 +346,11 @@ class ModelInterface:
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
-        """This is the async function to block chat with the model"""
+        """This is the blocking function to block chat with the model"""
+        raise NotImplementedError("This model has no operation for this.")
 
     async def stream_chat_async(
+        self,
         chats: "Thread",
         model: Optional[str] = None,
         max_tokens: int = 1024,
@@ -366,6 +361,21 @@ class ModelInterface:
         **kwargs,
     ) -> str | Dict[str, Any]:
         """This is the async function to stream chat with the model where each token is iteratively generated"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    async def chat_async(
+        self,
+        chats: "Thread",
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: float = 1,
+        token: Optional[str] = None,
+        timeout=(5, 30),
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> str | Dict[str, Any]:
+        """This is the async function to block chat with the model"""
+        raise NotImplementedError("This model has no operation for this.")
 
     def distributed_chat(
         self,
@@ -377,6 +387,7 @@ class ModelInterface:
         **kwargs,
     ):
         """This is the blocking function to chat with the model in a distributed manner"""
+        raise NotImplementedError("This model has no operation for this.")
 
     async def distributed_chat_async(
         self,
@@ -388,6 +399,83 @@ class ModelInterface:
         **kwargs,
     ):
         """This is the async function to chat with the model in a distributed manner"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    # Embedding methods
+
+    def embedding(
+        self,
+        chats: "Thread" | List[str] | str,
+        model: str,
+        token: Optional[str],
+        timeout: Tuple[int, int],
+        raw: bool,
+        extra_headers: Optional[Dict[str, str]],
+    ) -> "EmbeddingGen":
+        """This is the blocking function to get embeddings for the chat"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    async def embedding_async(
+        self,
+        chats: "Thread" | List[str] | str,
+        model: str,
+        token: Optional[str],
+        timeout: Tuple[int, int],
+        raw: bool,
+        extra_headers: Optional[Dict[str, str]],
+    ) -> "EmbeddingGen":
+        """This is the async function to get embeddings for the chat"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    # Image methods
+
+    def image_gen(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> "ImageGen":
+        """This is the blocking function to generate images"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    async def image_gen_async(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> "ImageGen":
+        """This is the async function to generate images"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    # Speech methods
+
+    def speech_to_text(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities: List[str],
+        **kwargs,
+    ) -> "Transcript":
+        """This is the blocking function to convert speech to text"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    async def speech_to_text_async(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities=["segment"],
+        **kwargs,
+    ) -> "Transcript":
+        """This is the async function to convert speech to text"""
+        raise NotImplementedError("This model has no operation for this.")
 
 
 ########################################################################################################################
@@ -1199,3 +1287,124 @@ class Dataset:
             train=ThreadsList.from_disk(f"{folder}/train"),
             eval=ThreadsList.from_disk(f"{folder}/eval"),
         )
+
+
+########################################################################################################################
+#
+# Modalities
+# ==========
+#
+# The code in this section is for the different modalities that are supported by the library.
+#
+########################################################################################################################
+
+########################################################################################################################
+# Embedding
+
+
+class EmbeddingGen(BaseModel):
+    embedding: List[List[float]] = Field(
+        ...,
+        description="The generated embedding as a list of floats.",
+    )
+
+
+########################################################################################################################
+# Image
+
+
+class ImageGen(BaseModel):
+    image: ImageType = Field(
+        ..., description="The generated image in PIL.Image format."
+    )
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+########################################################################################################################
+# Audio
+
+
+class WebVTTCue(BaseModel):
+    start: str = Field(..., description="The start time of the cue.")
+    end: str = Field(..., description="The end time of the cue.")
+    text: str = Field(..., description="The text of the cue.")
+
+
+class Transcript(BaseModel):
+    segments: list[WebVTTCue] = Field(
+        ..., description="A list of WebVTTCue objects representing the audio segments."
+    )
+
+    @property
+    def text(self):
+        return "\n".join(
+            [f"{cue.start} --> {cue.end}\t{cue.text}" for cue in self.segments]
+        )
+
+    def to(self, format: str = "text"):
+        if format == "vtt":
+            return self.text
+        elif format == "srt":
+            return "\n".join(
+                [
+                    f"{i + 1}\n{cue.start.replace('.', ',')} --> {cue.end.replace('.', ',')}\n{cue.text}"
+                    for i, cue in enumerate(self.segments)
+                ]
+            )
+        elif format == "text":
+            return "\n".join([f"{cue.text}" for cue in self.segments])
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+
+
+def get_transcript(text: str):
+    """
+    Parses a WebVTT string and returns a list of WebVTTCue objects.
+    """
+    cues = []
+    lines = text.strip().split("\n")
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Skip WEBVTT header and blank lines
+        if line == "WEBVTT" or not line:
+            i += 1
+            continue
+
+        # Extract the timestamp
+        match = re.match(
+            r"(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})", line
+        )
+        if match:
+            start_time = match.group(1)
+            end_time = match.group(2)
+            i += 1
+
+            # Collect text for this cue
+            text_lines = []
+            while (
+                i < len(lines)
+                and lines[i].strip()
+                and not re.match(
+                    r"(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})",
+                    lines[i].strip(),
+                )
+            ):
+                text_lines.append(lines[i].strip())
+                i += 1
+            text = " ".join(text_lines)
+
+            cue = WebVTTCue(
+                start=start_time,
+                end=end_time,
+                text=text,
+            )
+            cues.append(cue)
+        else:
+            i += 1
+
+    return Transcript(segments=cues)

@@ -7,6 +7,15 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+
+0.8.0
+-----
+
+- Adding multimodal support for OpenAI and Gemini endpoints.
+- Added new types for the new endpoints, etc.
+- New utils function ``file_size`` to get the size of the file in bytes.
+
+
 0.7.4
 -----
 

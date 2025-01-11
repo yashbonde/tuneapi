@@ -105,3 +105,8 @@ def fetch(url, cache="/tmp", method="post", force: bool = False, **kwargs):
     with open(fp, "w") as f:
         f.write(r.text)
     return r.text
+
+
+def file_size(file_path: str) -> int:
+    """Get the size of a file in bytes"""
+    return os.path.getsize(file_path)

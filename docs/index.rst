@@ -14,19 +14,18 @@ into a single MIT-licensed package. It contains 3 major submodules:
 - ``tuneapi.endpoints``: Contains all the API endpoints for the Tune Studio
 
 
-Prompt Injection
-----------------
+Prompt for Chat
+---------------
 
 Since ``tuneapi`` is a new and unpopular package most LLMs will not be able to generate code based on it. However you can
 paste the following code snippet in the prompt to generate the code for LLM API calls.
 
-Prompt
-~~~~~~
+.. code-block:: markdown
+    
+    You are going to use `tuneapi` package to use the LLM endpoint. Use structured generation for logical parts of
+    the process. Here's an example on how to use `tuneapi`:
 
-You are going to use ``tuneapi`` package to use the LLM endpoint. Here's a brief on how to use it:
-
-.. code-block:: python
-
+    ```python
     from tuneapi import tt, ta
 
     # define a thread which is a collection of messages with system, user and assistant messages
@@ -37,7 +36,7 @@ You are going to use ``tuneapi`` package to use the LLM endpoint. Here's a brief
     )
 
     # define a model
-    model = ta.Gemini() # Openai, Anthropic
+    model = ta.Gemini() # other LLMs: Openai, Anthropic, Groq, TuneModel, Mistral
 
     # get the response
     resp: str = model.chat(thread)
@@ -64,6 +63,7 @@ You are going to use ``tuneapi`` package to use the LLM endpoint. Here's a brief
 
     # get structured output
     resp: MathTest = model.chat(thread)
+    ```
 
 
 .. toctree::

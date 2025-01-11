@@ -10,6 +10,7 @@ from tuneapi.utils.code import (
 from tuneapi.utils.env import ENV
 from tuneapi.utils.fs import (
     fetch,
+    file_size,
     folder,
     get_files_in_folder,
     joinp,

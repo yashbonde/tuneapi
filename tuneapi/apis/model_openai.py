@@ -4,9 +4,12 @@ Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs
 
 # Copyright © 2024-2025 Frello Technology Private Limited
 
+import os
 import httpx
 import requests
-from typing import Optional, Any, List, Dict
+from PIL import Image
+from io import BytesIO
+from typing import Optional, Any, List, Dict, Tuple
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -20,19 +23,43 @@ class Openai(tt.ModelInterface):
         base_url: str = "https://api.openai.com/v1/chat/completions",
         extra_headers: Optional[Dict[str, str]] = None,
         api_token: Optional[str] = None,
+        emebdding_url: Optional[str] = None,
+        image_gen_url: Optional[str] = None,
+        audio_transcribe: Optional[str] = None,
+        audio_gen_url: Optional[str] = None,
     ):
         self.model_id = id
         self.base_url = base_url
         self.api_token = api_token or tu.ENV.OPENAI_TOKEN("")
         self.extra_headers = extra_headers
+        self.emebdding_url = emebdding_url or base_url.replace(
+            "/chat/completions",
+            "/embeddings",
+        )
+        self.image_gen_url = image_gen_url or base_url.replace(
+            "/chat/completions",
+            "/images/generations",
+        )
+        self.audio_transcribe_url = audio_transcribe or base_url.replace(
+            "/chat/completions",
+            "/audio/transcriptions",
+        )
+        self.audio_gen_url = audio_gen_url or base_url.replace(
+            "/chat/completions",
+            "/audio/speech",
+        )
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
 
-    def _process_header(self, token: Optional[str] = None):
+    def _process_header(
+        self,
+        token: Optional[str] = None,
+        content_type: str = "application/json",
+    ):
         return {
             "Authorization": "Bearer " + (token or self.api_token),
-            "Content-Type": "application/json",
+            "Content-Type": content_type,
         }
 
     def _process_input(
@@ -181,44 +208,7 @@ class Openai(tt.ModelInterface):
             fn_call["arguments"] = tu.from_json(fn_call["arguments"])
             yield fn_call
 
-    # Interface methods
-
-    def chat(
-        self,
-        chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
-        extra_headers: Optional[Dict[str, str]] = None,
-        **kwargs,
-    ) -> Any:
-        output = ""
-        try:
-            for x in self.stream_chat(
-                chats=chats,
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                parallel_tool_calls=parallel_tool_calls,
-                token=token,
-                extra_headers=extra_headers,
-                raw=False,
-                **kwargs,
-            ):
-                if isinstance(x, dict):
-                    output = x
-                else:
-                    output += x
-        except requests.HTTPError as e:
-            print(e.response.text)
-            raise e
-
-        if isinstance(chats, tt.Thread) and chats.schema:
-            output = chats.schema(**tu.from_json(output))
-            return output
-        return output
+    # Chat methods
 
     def stream_chat(
         self,
@@ -260,7 +250,7 @@ class Openai(tt.ModelInterface):
 
         yield from self._process_output(raw, response.iter_lines)
 
-    async def chat_async(
+    def chat(
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
@@ -272,21 +262,26 @@ class Openai(tt.ModelInterface):
         **kwargs,
     ) -> Any:
         output = ""
-        async for x in self.stream_chat_async(
-            chats=chats,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            parallel_tool_calls=parallel_tool_calls,
-            token=token,
-            extra_headers=extra_headers,
-            raw=False,
-            **kwargs,
-        ):
-            if isinstance(x, dict):
-                output = x
-            else:
-                output += x
+        try:
+            for x in self.stream_chat(
+                chats=chats,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                parallel_tool_calls=parallel_tool_calls,
+                token=token,
+                extra_headers=extra_headers,
+                raw=False,
+                **kwargs,
+            ):
+                if isinstance(x, dict):
+                    output = x
+                else:
+                    output += x
+        except requests.HTTPError as e:
+            print(e.response.text)
+            raise e
+
         if isinstance(chats, tt.Thread) and chats.schema:
             output = chats.schema(**tu.from_json(output))
             return output
@@ -337,6 +332,38 @@ class Openai(tt.ModelInterface):
                 ):
                     yield x
 
+    async def chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = None,
+        temperature: float = 1,
+        parallel_tool_calls: bool = False,
+        token: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> Any:
+        output = ""
+        async for x in self.stream_chat_async(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            parallel_tool_calls=parallel_tool_calls,
+            token=token,
+            extra_headers=extra_headers,
+            raw=False,
+            **kwargs,
+        ):
+            if isinstance(x, dict):
+                output = x
+            else:
+                output += x
+        if isinstance(chats, tt.Thread) and chats.schema:
+            output = chats.schema(**tu.from_json(output))
+            return output
+        return output
+
     def distributed_chat(
         self,
         prompts: List[tt.Thread],
@@ -379,54 +406,64 @@ class Openai(tt.ModelInterface):
             **kwargs,
         )
 
-    # Embedding models
+    # Embedding methods
 
-    def embedding(
+    def _prepare_embedding_input(
         self,
         chats: tt.Thread | List[str] | str,
-        cum: bool = False,
-        model: str = "text-embedding-3-small",
-        token: Optional[str] = None,
-        timeout=(5, 60),
-        raw: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        model: str,
+        token: str,
+        extra_headers: Optional[Dict[str, str]],
     ):
-        """If you pass a list then returned items are in the insertion order"""
-        text = []
-
         headers = self._process_header(token)
         extra_headers = extra_headers or self.extra_headers
         if extra_headers:
             headers.update(extra_headers)
         if isinstance(chats, tt.Thread):
-            _, messages = self._process_input(chats, token)
-            for i, m in enumerate(messages):
-                x = f"<{m['role']}> : {m['content']}\n\n"
+            text = []
+            for i, m in enumerate(chats.chats):
+                x = f"<{m.role}> : {m.value}"
                 text.append(x)
-
-            if cum:
-                text = ["".join(text)]
+            text = ["".join(text)]
         elif isinstance(chats, tt.Message):
             text = [chats.value]
         elif isinstance(chats, list) and len(chats) and isinstance(chats[0], str):
-            # this is an exception
             text = chats
         elif isinstance(chats, str):
             text = [chats]
         else:
             raise ValueError(f"Invalid input type. Got {type(chats)}")
+        data = {
+            "input": text,
+            "model": model,
+            "encoding_format": "float",
+        }
+        return headers, data
 
-        r = requests.post(
-            "https://api.openai.com/v1/embeddings",
-            json={
-                "input": text,
-                "model": model,
-                "encoding_format": "float",
-            },
-            headers=headers,
-            timeout=timeout,
+    def embedding(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "text-embedding-3-small",
+        token: Optional[str] = None,
+        raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout: Tuple[int, int] = (5, 60),
+    ) -> tt.EmbeddingGen:
+        """If you pass a list then returned items are in the insertion order"""
+        headers, data = self._prepare_embedding_input(
+            chats=chats,
+            model=model,
+            token=token,
+            extra_headers=extra_headers,
         )
+
         try:
+            r = requests.post(
+                url=self.emebdding_url,
+                json=data,
+                headers=headers,
+                timeout=timeout,
+            )
             r.raise_for_status()
         except Exception as e:
             print(r.text)
@@ -435,16 +472,368 @@ class Openai(tt.ModelInterface):
         if raw:
             return r.json()
 
-        emb = [
-            x["embedding"] for x in sorted(r.json()["data"], key=lambda x: x["index"])
-        ]
-        return emb
+        return tt.EmbeddingGen(
+            embeddings=[
+                x["embedding"]
+                for x in sorted(
+                    r.json()["data"],
+                    key=lambda x: x["index"],
+                )
+            ]
+        )
+
+    async def embedding_async(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "text-embedding-3-small",
+        token: Optional[str] = None,
+        timeout: Tuple[int, int] = (10, 60),  # Increased connection timeout
+        raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> tt.EmbeddingGen:
+        """If you pass a list then returned items are in the insertion order"""
+        headers, data = self._prepare_embedding_input(
+            chats=chats,
+            model=model,
+            token=token,
+            extra_headers=extra_headers,
+        )
+
+        async with httpx.AsyncClient(http2=False) as client:
+            try:
+                r = await client.post(
+                    url=self.emebdding_url,
+                    json=data,
+                    headers=headers,
+                    timeout=timeout,
+                )
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                print(e.response.text)
+                raise e
+            except Exception as e:
+                print(f"An unexpected error occured: {e}")
+                raise e
+
+            resp = ""
+            async for chunk in r.aiter_bytes():
+                resp += chunk.decode("utf-8")
+
+            if raw:
+                return tu.from_json(resp)
+
+            return tt.EmbeddingGen(
+                embeddings=[
+                    x["embedding"]
+                    for x in sorted(
+                        r.json()["data"],
+                        key=lambda x: x["index"],
+                    )
+                ]
+            )
+
+    # Image methods
+
+    def _prepare_image_gen_input(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        extra_headers,
+        **kwargs,
+    ):
+        assert size in [
+            "1024x1024",
+            "1792x1024",
+            "1024x1792",
+        ], "Only these size are allowed: https://platform.openai.com/docs/api-reference/images/create"
+        data = {
+            "model": model,
+            "prompt": prompt,
+            "n": n,
+            "size": size,
+            "style": style,
+            "response_format": "url",
+        }
+        if kwargs:
+            data.update(kwargs)
+        headers = self._process_header()
+        if extra_headers:
+            headers.update(extra_headers)
+        return headers, data
+
+    def image_gen(
+        self,
+        prompt: str,
+        style: str = "natural",
+        model: str = "dall-e-3",
+        n: int = 1,
+        size: str = "1024x1024",
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        **kwargs,
+    ) -> tt.ImageGen:
+
+        headers, data = self._prepare_image_gen_input(
+            prompt=prompt,
+            style=style,
+            model=model,
+            n=n,
+            size=size,
+            extra_headers=extra_headers,
+            **kwargs,
+        )
+        try:
+            r = requests.post(
+                url=self.image_gen_url,
+                json=data,
+                headers=headers,
+                timeout=timeout,
+            )
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Cannot generate image: {r.text}")
+            raise e
+        out = r.json()
+
+        try:
+            img_r = requests.get(out["data"][0]["url"])
+            img_r.raise_for_status()
+        except requests.HTTPError as e:
+            print(e.response.text)
+            raise e
+        except Exception as e:
+            tu.logger.error(f"Cannot fetch image: {r.text}")
+            raise e
+        cont = BytesIO(img_r.content)
+        return tt.ImageGen(
+            image=Image.open(cont),
+        )
+
+    async def image_gen_async(
+        self,
+        prompt: str,
+        style: str = "natural",
+        model: str = "dall-e-3",
+        n: int = 1,
+        size: str = "1024x1024",
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        **kwargs,
+    ) -> Image:
+
+        headers, data = self._prepare_image_gen_input(
+            prompt=prompt,
+            style=style,
+            model=model,
+            n=n,
+            size=size,
+            extra_headers=extra_headers,
+            **kwargs,
+        )
+
+        async with httpx.AsyncClient() as client:
+            try:
+                r = await client.post(
+                    url=self.image_gen_url,
+                    json=data,
+                    headers=headers,
+                    timeout=timeout,
+                )
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                tu.logger.error(f"Cannot generate image: {e.response.text}")
+                raise e
+            out = r.json()
+
+            try:
+                img_r = await client.get(out["data"][0]["url"])
+                img_r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                tu.logger.error(f"Cannot fetch image: {e.response.text}")
+                raise e
+            cont = BytesIO(img_r.content)
+            return Image.open(cont)
+
+    # Audio methods
+
+    def speech_to_text(
+        self,
+        prompt: str,
+        audio: str,
+        model="whisper-1",
+        timestamp_granularities=["segment"],
+        **kwargs,
+    ) -> tt.Transcript:
+        """
+        Translates audio using the OpenAI API. Unfortunately, I couldn't figure out how to get this working with the
+        python requests library, so I'm using the openai library instead. For both of our sake let's hope ``openai``
+        is stable long enough.
+
+        Args:
+            prompt (str): The instruction prompt to guide the translation.
+            audio (str): The path to the audio file to translate.
+            model (str): The model to use for translation.
+            response_format (str): The format of the response. Possible values are "json", "text", "srt",
+                "verbose_json", or "vtt". Defaults to "json".
+            timestamp_granularities (List[str]): The timestamp granularities to include in the response. Defaults to ["segment"].
+
+        Returns:
+            The translated text as a string, or None if an error occurs.
+        """
+
+        try:
+            import openai
+        except ImportError:
+            raise ImportError(
+                "Please install the OpenAI API package to use `speech_to_text`"
+            )
+
+        import openai
+
+        if not (isinstance(audio, str) and os.path.exists(audio)):
+            raise ValueError("Invalid audio file path")
+
+        # max file size can be 25 MB
+        if tu.file_size(audio) / (1024 * 1024) > 25:
+            raise ValueError("Audio file size should be less than 25 MB")
+
+        file = open(audio, "rb")
+
+        data = {
+            "model": model,
+            "prompt": prompt,
+            "response_format": "vtt",
+            "timestamp_granularities": timestamp_granularities,
+        }
+        if kwargs:
+            data.update(kwargs)
+
+        out = openai.audio.transcriptions.create(file=file, **data)
+
+        file.close()
+        return tt.get_transcript(text=out)
+
+    def _prepare_audio_gen_input(
+        self,
+        prompt: str,
+        voice: str,
+        model: str,
+        response_format: str,
+        extra_headers,
+        **kwargs,
+    ):
+        data = {
+            "model": model,
+            "input": prompt,
+            "voice": voice,
+            "response_format": response_format,
+        }
+        if kwargs:
+            data.update(kwargs)
+        headers = self._process_header()
+        if extra_headers:
+            headers.update(extra_headers)
+        return headers, data
+
+    def text_to_speech(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        **kwargs,
+    ) -> bytes:
+
+        headers, data = self._prepare_audio_gen_input(
+            prompt=prompt,
+            voice=voice,
+            model=model,
+            response_format=response_format,
+            extra_headers=extra_headers,
+            **kwargs,
+        )
+        try:
+            r = requests.post(
+                url=self.audio_gen_url,
+                json=data,
+                headers=headers,
+                timeout=timeout,
+            )
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            tu.logger.error(f"Cannot to text to speech: {e.response.text}")
+            raise e
+        except Exception as e:
+            tu.logger.error(f"An unexpected error occured: {e}")
+            raise e
+
+        return r.content
+
+    async def text_to_speech_async(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        **kwargs,
+    ) -> bytes:
+
+        headers, data = self._prepare_audio_gen_input(
+            prompt=prompt,
+            voice=voice,
+            model=model,
+            response_format=response_format,
+            extra_headers=extra_headers,
+            **kwargs,
+        )
+
+        async with httpx.AsyncClient() as client:
+            try:
+                r = await client.post(
+                    url=self.audio_gen_url,
+                    json=data,
+                    headers=headers,
+                    timeout=timeout,
+                )
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                tu.logger.error(f"Cannot to text to speech: {e.response.text}")
+                raise e
+            except Exception as e:
+                tu.logger.error(f"An unexpected error occured: {e}")
+                raise e
+
+            return r.content
 
 
 # Other OpenAI compatible models
 
 
 class Mistral(Openai):
+    """
+    A class to interact with Mistral's Large Language Models (LLMs) via their API. Note this class does not contain the
+    `embedding` method.
+
+    Attributes:
+        id (str): Identifier for the Mistral model.
+        base_url (str): The base URL for the Mistral API. Defaults to "https://api.mistral.ai/v1/chat/completions".
+        extra_headers (Optional[Dict[str, str]]): Additional headers to include in API requests.
+        api_token (Optional[str]): API token for authenticating requests. If not provided, it will use the token from the environment variable MISTRAL_TOKEN.
+
+    Methods:
+        embedding(*a, **k): Raises NotImplementedError as Mistral does not support embeddings.
+
+    Note:
+        For more information, visit the Mistral API documentation at https://console.mistral.ai/
+    """
+
     def __init__(
         self,
         id: str = "mistral-small-latest",
@@ -464,6 +853,20 @@ class Mistral(Openai):
 
 
 class Groq(Openai):
+    """
+    A class to interact with Groq's Large Language Models (LLMs) via their API. Note this class does not contain the
+    `embedding` method.
+
+    Attributes:
+        id (str): Identifier for the Mistral model.
+        base_url (str): The base URL for the Mistral API. Defaults to "https://api.groq.com/openai/v1/chat/completions".
+        extra_headers (Optional[Dict[str, str]]): Additional headers to include in API requests.
+        api_token (Optional[str]): API token for authenticating requests. If not provided, it will use the token from the environment variable MISTRAL_TOKEN.
+
+    Note:
+        For more information, visit the Mistral API documentation at https://console.groq.com/
+    """
+
     def __init__(
         self,
         id: str = "llama3-70b-8192",
@@ -483,13 +886,27 @@ class Groq(Openai):
 
 
 class TuneModel(Openai):
+    """
+    A class to interact with Groq's Large Language Models (LLMs) via their API.
+
+    Attributes:
+        id (str): Identifier for the Mistral model.
+        base_url (str): The base URL for the Mistral API. Defaults to "https://proxy.tune.app/chat/completions".
+        org_id (Optional[str]): Organization ID for the Tune API.
+        extra_headers (Optional[Dict[str, str]]): Additional headers to include in API requests.
+        api_token (Optional[str]): API token for authenticating requests. If not provided, it will use the token from the environment variable MISTRAL_TOKEN.
+
+    Note:
+        For more information, visit the Mistral API documentation at https://tune.app/
+    """
+
     def __init__(
         self,
         id: str = "meta/llama-3.1-8b-instruct",
         base_url: str = "https://proxy.tune.app/chat/completions",
-        api_token: Optional[str] = None,
         org_id: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
+        api_token: Optional[str] = None,
     ):
         if extra_headers is None:
             extra_headers = {}
@@ -501,7 +918,41 @@ class TuneModel(Openai):
             base_url=base_url,
             extra_headers=extra_headers,
             api_token=api_token or tu.ENV.TUNEAPI_TOKEN(),
+            emebdding_url="https://proxy.tune.app/v1/embeddings",
         )
 
-    def embedding(*a, **k):
-        raise NotImplementedError("TuneModel does not support embeddings")
+    def embedding(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "openai/text-embedding-3-small",
+        token: Optional[str] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        return super().embedding(
+            chats=chats,
+            model=model,
+            token=token,
+            timeout=timeout,
+            raw=raw,
+            extra_headers=extra_headers,
+        )
+
+    async def embedding_async(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "openai/text-embedding-3-small",
+        token: Optional[str] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        raw: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        return await super().embedding_async(
+            chats=chats,
+            model=model,
+            token=token,
+            timeout=timeout,
+            raw=raw,
+            extra_headers=extra_headers,
+        )

@@ -8,7 +8,7 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 import httpx
 import requests
 from pydantic import BaseModel
-from typing import get_args, get_origin, List, Optional, Dict, Any, Union
+from typing import get_args, get_origin, List, Optional, Dict, Any, Union, Tuple
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -22,14 +22,22 @@ class Gemini(tt.ModelInterface):
         id: Optional[str] = "gemini-2.0-flash-exp",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
         extra_headers: Optional[Dict[str, str]] = None,
+        api_token: Optional[str] = None,
+        emebdding_url: Optional[str] = None,
     ):
         self.model_id = id
         self.base_url = base_url
-        self.api_token = tu.ENV.GEMINI_TOKEN("")
+        self.api_token = api_token or tu.ENV.GEMINI_TOKEN("")
         self.extra_headers = extra_headers
+        self.embedding_url = emebdding_url or base_url
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
+
+    def _process_header(self):
+        return {
+            "Content-Type": "application/json",
+        }
 
     def _process_input(
         self,
@@ -122,10 +130,7 @@ class Gemini(tt.ModelInterface):
                 raise Exception(f"Unknown role: {m.role}")
 
         # create headers and params
-        headers = {
-            "Content-Type": "application/json",
-        }
-        params = {"key": self.api_token}
+        headers = self._process_header()
         url = self.base_url.format(
             id=model or self.model_id,
             rpc="streamGenerateContent",
@@ -200,7 +205,7 @@ class Gemini(tt.ModelInterface):
             print("Saving at path " + fp)
             tu.to_json(data, fp=fp)
 
-        return url, headers, params, data
+        return url, headers, data
 
     def _process_output(self, raw: bool, lines_fn: callable):
         block_lines = ""
@@ -248,6 +253,46 @@ class Gemini(tt.ModelInterface):
 
     # Interaction methods
 
+    def stream_chat(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: float = 1,
+        token: Optional[str] = None,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        raw: bool = False,
+        timeout=(5, 60),
+        **kwargs,
+    ):
+        url, headers, data = self._process_input(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            token=token,
+            debug=debug,
+            extra_headers=extra_headers,
+            **kwargs,
+        )
+
+        response = requests.post(
+            url=url,
+            headers=headers,
+            params={"key": self.api_token},
+            json=data,
+            stream=True,
+            timeout=timeout,
+        )
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            yield response.text
+            raise e
+
+        yield from self._process_output(raw=raw, lines_fn=response.iter_lines)
+
     def chat(
         self,
         chats: tt.Thread | str,
@@ -286,20 +331,20 @@ class Gemini(tt.ModelInterface):
             return output
         return output
 
-    def stream_chat(
+    async def stream_chat_async(
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
         max_tokens: int = 4096,
         temperature: float = 1,
         token: Optional[str] = None,
+        timeout=(5, 60),
+        raw: bool = False,
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
-        raw: bool = False,
-        timeout=(5, 60),
         **kwargs,
     ):
-        url, headers, params, data = self._process_input(
+        url, headers, data = self._process_input(
             chats=chats,
             model=model,
             max_tokens=max_tokens,
@@ -310,21 +355,26 @@ class Gemini(tt.ModelInterface):
             **kwargs,
         )
 
-        response = requests.post(
-            url=url,
-            headers=headers,
-            params=params,
-            json=data,
-            stream=True,
-            timeout=timeout,
-        )
-        try:
-            response.raise_for_status()
-        except Exception as e:
-            yield response.text
-            raise e
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url=url,
+                headers=headers,
+                params={"key": self.api_token},
+                json=data,
+                timeout=timeout,
+            )
+            try:
+                response.raise_for_status()
+            except Exception as e:
+                yield str(e)
+                return
 
-        yield from self._process_output(raw=raw, lines_fn=response.iter_lines)
+        async for chunk in response.aiter_bytes():
+            for x in self._process_output(
+                raw=raw,
+                lines_fn=chunk.decode("utf-8").splitlines,
+            ):
+                yield x
 
     async def chat_async(
         self,
@@ -365,51 +415,6 @@ class Gemini(tt.ModelInterface):
             output = chats.schema(**tu.from_json(output))
             return output
         return output
-
-    async def stream_chat_async(
-        self,
-        chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: float = 1,
-        token: Optional[str] = None,
-        timeout=(5, 60),
-        raw: bool = False,
-        debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        **kwargs,
-    ):
-        url, headers, params, data = self._process_input(
-            chats=chats,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            token=token,
-            debug=debug,
-            extra_headers=extra_headers,
-            **kwargs,
-        )
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url=url,
-                headers=headers,
-                params=params,
-                json=data,
-                timeout=timeout,
-            )
-            try:
-                response.raise_for_status()
-            except Exception as e:
-                yield str(e)
-                return
-
-        async for chunk in response.aiter_bytes():
-            for x in self._process_output(
-                raw=raw,
-                lines_fn=chunk.decode("utf-8").splitlines,
-            ):
-                yield x
 
     def distributed_chat(
         self,
@@ -452,6 +457,115 @@ class Gemini(tt.ModelInterface):
             debug=debug,
             **kwargs,
         )
+
+    # Embedding methods
+
+    def _prepare_embedding_input(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "text-embedding-004:embedContent",
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        headers = self._process_header()
+        extra_headers = extra_headers or self.extra_headers
+        if extra_headers:
+            headers.update(extra_headers)
+        if isinstance(chats, tt.Thread):
+            text = []
+            for i, m in enumerate(chats.chats):
+                x = f"<{m.role}> : {m.value}"
+                text.append(x)
+        elif isinstance(chats, tt.Message):
+            text = [chats.value]
+        elif isinstance(chats, list) and len(chats) and isinstance(chats[0], str):
+            if len(chats) > 1:
+                raise ValueError(
+                    f"Only one string can be passed for list of strings. Got: {len(chats)}"
+                )
+            text = chats
+        elif isinstance(chats, str):
+            text = [chats]
+        else:
+            raise ValueError(f"Invalid input type. Got {type(chats)}")
+        data = {
+            "model": f"models/{model}",
+            "content": {"parts": [{"text": x} for x in text]},
+        }
+        url = self.base_url.format(id=model, rpc="embedContent")
+        return url, headers, data
+
+    def embedding(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "text-embedding-004",
+        extra_headers: Optional[Dict[str, str]] = None,
+        token: Optional[str] = None,
+        timeout: Tuple[int, int] = (5, 60),
+        raw: bool = False,
+    ) -> tt.EmbeddingGen:
+        url, headers, data = self._prepare_embedding_input(
+            chats=chats,
+            model=model,
+            extra_headers=extra_headers,
+        )
+        response = requests.post(
+            url=url,
+            headers=headers,
+            json=data,
+            timeout=timeout,
+            params={"key": token or self.api_token},
+        )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            tu.logger.error(f"Cannot get emeddings: {response.text}")
+            raise e
+        except Exception as e:
+            tu.logger.error(e)
+            raise e
+        resp = response.json()
+        if raw:
+            return resp
+
+        return tt.EmbeddingGen(embedding=[resp["embedding"]["values"]])
+
+    async def embedding_async(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str = "text-embedding-004",
+        extra_headers: Optional[Dict[str, str]] = None,
+        token: Optional[str] = None,
+        timeout: Tuple[float, float] = (5.0, 60.0),  # httpx uses float for timeouts
+        raw: bool = False,
+    ) -> tt.EmbeddingGen:
+        url, headers, data = self._prepare_embedding_input(
+            chats=chats,
+            model=model,
+            extra_headers=extra_headers,
+        )
+
+        async with httpx.AsyncClient() as client:  # Use a context manager for efficient connection pooling
+            try:
+                response = await client.post(
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    timeout=timeout,
+                    params={"key": token or self.api_token},
+                )
+                response.raise_for_status()  # Raise an exception for bad status codes
+            except httpx.HTTPError as e:
+                tu.logger.error(f"Cannot get embeddings: {e.response.text}")
+                raise
+            except Exception as e:
+                tu.logger.error(e)
+                raise
+
+        resp = response.json()
+        if raw:
+            return resp
+
+        return tt.EmbeddingGen(embedding=[resp["embedding"]["values"]])
 
 
 # helpers
