@@ -7,6 +7,12 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+0.7.4
+-----
+
+- Remove ``model_tune.py``, ``model_groq.py`` and ``model_mistral.py`` and subclass those models from ``Openai``.
+
+
 0.7.3
 -----
 

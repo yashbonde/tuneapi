@@ -6,7 +6,7 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 
 import httpx
 import requests
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt

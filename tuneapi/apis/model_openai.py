@@ -6,8 +6,6 @@ Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs
 
 import httpx
 import requests
-from pydantic import BaseModel
-
 from typing import Optional, Any, List, Dict
 
 import tuneapi.utils as tu
@@ -18,13 +16,14 @@ from tuneapi.apis.turbo import distributed_chat, distributed_chat_async
 class Openai(tt.ModelInterface):
     def __init__(
         self,
-        id: Optional[str] = "gpt-4o",
+        id: str = "gpt-4o",
         base_url: str = "https://api.openai.com/v1/chat/completions",
         extra_headers: Optional[Dict[str, str]] = None,
+        api_token: Optional[str] = None,
     ):
         self.model_id = id
         self.base_url = base_url
-        self.api_token = tu.ENV.OPENAI_TOKEN("")
+        self.api_token = api_token or tu.ENV.OPENAI_TOKEN("")
         self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
@@ -440,3 +439,69 @@ class Openai(tt.ModelInterface):
             x["embedding"] for x in sorted(r.json()["data"], key=lambda x: x["index"])
         ]
         return emb
+
+
+# Other OpenAI compatible models
+
+
+class Mistral(Openai):
+    def __init__(
+        self,
+        id: str = "mistral-small-latest",
+        base_url: str = "https://api.mistral.ai/v1/chat/completions",
+        extra_headers: Optional[Dict[str, str]] = None,
+        api_token: Optional[str] = None,
+    ):
+        super().__init__(
+            id=id,
+            base_url=base_url,
+            extra_headers=extra_headers,
+            api_token=api_token or tu.ENV.MISTRAL_TOKEN(),
+        )
+
+    def embedding(*a, **k):
+        raise NotImplementedError("Mistral does not support embeddings")
+
+
+class Groq(Openai):
+    def __init__(
+        self,
+        id: str = "llama3-70b-8192",
+        base_url: str = "https://api.groq.com/openai/v1/chat/completions",
+        extra_headers: Optional[Dict[str, str]] = None,
+        api_token: Optional[str] = None,
+    ):
+        super().__init__(
+            id=id,
+            base_url=base_url,
+            extra_headers=extra_headers,
+            api_token=api_token or tu.ENV.GROQ_TOKEN(),
+        )
+
+    def embedding(*a, **k):
+        raise NotImplementedError("Groq does not support embeddings")
+
+
+class TuneModel(Openai):
+    def __init__(
+        self,
+        id: str = "meta/llama-3.1-8b-instruct",
+        base_url: str = "https://proxy.tune.app/chat/completions",
+        api_token: Optional[str] = None,
+        org_id: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        if extra_headers is None:
+            extra_headers = {}
+        if org_id is not None:
+            extra_headers["X-Org-Id"] = org_id
+
+        super().__init__(
+            id=id,
+            base_url=base_url,
+            extra_headers=extra_headers,
+            api_token=api_token or tu.ENV.TUNEAPI_TOKEN(),
+        )
+
+    def embedding(*a, **k):
+        raise NotImplementedError("TuneModel does not support embeddings")
