@@ -5,6 +5,7 @@ from tuneapi.types.chats import (
     Thread,
     ThreadsList,
     ModelInterface,
+    Usage,
     ThreadsTree,
     Tool,
     EmbeddingGen,

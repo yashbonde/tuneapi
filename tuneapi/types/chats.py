@@ -478,6 +478,42 @@ class ModelInterface:
         raise NotImplementedError("This model has no operation for this.")
 
 
+class Usage:
+    def __init__(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cached_tokens: int,
+        **kwargs,
+    ):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cached_tokens = cached_tokens
+        self.total_tokens = input_tokens + output_tokens
+        self.extra = kwargs
+
+    def __getitem__(self, x):
+        return getattr(self, x)
+
+    def __repr__(self) -> str:
+        return f"<Usage: {self.input_tokens} [Cached: {self.cached_tokens}] -> {self.output_tokens}>"
+
+    def to_json(self, *a, **k) -> str:
+        return tu.to_json(self.__dict__, *a, **k)
+
+    def cost(
+        self,
+        input_token_per_million: float,
+        cache_token_per_million: float,
+        output_token_per_million: float,
+    ) -> float:
+        return (
+            self.input_tokens * input_token_per_million / 1e6
+            + self.cached_tokens * cache_token_per_million / 1e6
+            + self.output_tokens * output_token_per_million / 1e6
+        )
+
+
 ########################################################################################################################
 #
 # Thread is an array of Messages and / or Tools.
@@ -501,7 +537,7 @@ class Thread:
         model: Optional[str] = None,
         id: str = "",
         title: str = "",
-        tools: List[Tool] = [],
+        tools: Optional[List[Tool]] = None,
         schema: Optional[BaseModel] = None,
         **kwargs,
     ):

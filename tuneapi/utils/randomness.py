@@ -78,3 +78,19 @@ def reservoir_sampling(stream, k, seed: int = 4):
                 reservoir[j] = item
 
     return reservoir
+
+
+def sample(items, seed: int = 4):
+    try:
+        import numpy as np
+
+        if seed == -1:
+            seed = None
+        rng = np.random.default_rng(seed)
+        foo = rng.choice
+    except ImportError:
+        logger.warning(
+            "Numpy not found, using python's random module. Seed will be ignored."
+        )
+        foo = random.choice
+    return foo(items)

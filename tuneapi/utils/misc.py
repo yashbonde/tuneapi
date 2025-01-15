@@ -41,7 +41,7 @@ class SimplerTimes:
 
     def get_now_str() -> str:  # type: ignore
         """Get the current datetime in UTC timezone as a string"""
-        return SimplerTimes.get_now_datetime().strftime("%Y-%m-%d %H:%M:%S.%f")
+        return SimplerTimes.get_now_datetime().strftime("%Y-%m-%d_%H:%M:%S.%f")
 
     def get_now_human(date: bool = True, tz=None) -> str:
         """Get the current datetime in timezone as a human readable string"""

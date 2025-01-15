@@ -4,10 +4,10 @@ import queue
 import asyncio
 import threading
 from tqdm import trange
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass
 
-from tuneapi.types import Thread, ModelInterface, human, system
+from tuneapi.types import Thread, ModelInterface, Usage
 from tuneapi.utils import logger
 
 
@@ -19,8 +19,9 @@ def distributed_chat(
     retry: int = 3,
     pbar=True,
     debug=False,
+    usage: bool = False,
     **kwargs,
-):
+) -> List | Tuple[List, Usage]:
     """
     Distributes multiple chat prompts across a thread pool for parallel processing.
 
@@ -83,9 +84,14 @@ def distributed_chat(
 
                 try:
                     out = task.model.chat(chats=task.prompt, **task.kwargs)
+                    if usage:
+                        out, _usage = out
                     if post_logic:
                         out = post_logic(out)
-                    result_channel.put(_Result(task.index, out, True))
+                    if not usage:
+                        result_channel.put(_Result(task.index, out, True))
+                    else:
+                        result_channel.put(_Result(task.index, (out, _usage), True))
                 except Exception as e:
                     if task.retry_count < retry:
                         # Create new model instance for retry
@@ -127,6 +133,7 @@ def distributed_chat(
     _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
 
     # Queue initial tasks
+    kwargs.update({"usage": usage})
     for i, p in enumerate(prompts):
         nm = model.__class__(
             id=model.model_id,
@@ -146,10 +153,18 @@ def distributed_chat(
 
     # Process results
     completed = 0
+    all_usage: List[Usage] = []
     while completed < len(prompts):
         try:
             result = result_channel.get(timeout=1)
-            results[result.index] = result.data if result.success else result.error
+            if result.success:
+                if usage:
+                    results[result.index], _usage = result.data
+                    all_usage.append(_usage)
+                else:
+                    results[result.index] = result.data
+            else:
+                results[result.index] = result.error
             if _pbar:
                 _pbar.update(1)
             completed += 1
@@ -166,6 +181,14 @@ def distributed_chat(
     if _pbar:
         _pbar.close()
 
+    if usage:
+        _usage = Usage(
+            input_tokens=sum([u.input_tokens for u in all_usage]),
+            output_tokens=sum([u.output_tokens for u in all_usage]),
+            cached_tokens=sum([u.cached_tokens for u in all_usage]),
+            all_usage=all_usage,
+        )
+        return results, _usage
     return results
 
 
@@ -177,16 +200,25 @@ async def distributed_chat_async(
     retry: int = 3,
     pbar=True,
     debug=False,
+    usage: bool = False,
     **kwargs,
 ):
+    _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
     results = [None for _ in range(len(prompts))]
+    kwargs.update({"usage": usage})
 
     async def process_prompt(index, prompt, retry_count=0):
         try:
             out = await model.chat_async(chats=prompt, **kwargs)
+            if usage:
+                out, _usage = out
             if post_logic:
                 out = post_logic(out)
-            return (index, out, True)
+            _pbar.update(1)
+            if not usage:
+                return (index, out, True)
+            else:
+                return (index, (out, _usage), True)
         except Exception as e:
             if retry_count < retry:
                 return await process_prompt(index, prompt, retry_count + 1)
@@ -201,25 +233,33 @@ async def distributed_chat_async(
     if debug:
         logger.info(f"Processing {len(prompts)} prompts with {max_threads} workers")
 
-    _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
-
     results_from_gather = await asyncio.gather(*tasks)
 
     # Process results
+    all_usage: List[Usage] = []
     for r in results_from_gather:
         index, data, success, *error = r
 
         if success:
-            results[index] = data
+            if usage:
+                results[index], _usage = data
+                all_usage.append(_usage)
+            else:
+                results[index] = data
         else:
             results[index] = error[0] if error else None
-
-        if _pbar:
-            _pbar.update(1)
 
     if _pbar:
         _pbar.close()
 
+    if usage:
+        _usage = Usage(
+            input_tokens=sum([u.input_tokens for u in all_usage]),
+            output_tokens=sum([u.output_tokens for u in all_usage]),
+            cached_tokens=sum([u.cached_tokens for u in all_usage]),
+            all_usage=all_usage,
+        )
+        return results, _usage
     return results
 
 

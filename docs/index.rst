@@ -53,7 +53,7 @@ paste the following code snippet in the prompt to generate the code for LLM API 
 
     class MathTest(BaseModel):
         title: str = Field(..., description="Title of the test")
-        problems: List[MathProblem] = Field(..., description="List of math problems")
+        problems: List[MathProblem] = ... # only list of other BaseModel is allowed
 
     # define a thread which is a collection of messages
     thread = tt.Thread(
@@ -64,6 +64,18 @@ paste the following code snippet in the prompt to generate the code for LLM API 
     # get structured output
     resp: MathTest = model.chat(thread)
     ```
+
+Structured generation
+---------------------
+
+.. epigraph::
+
+    Types and Logic is the two parts of programming.
+
+
+With structured generation you can get ``pydantic.BaseModel`` objects from ``tt.ModelInterface.chat`` and
+``tt.ModelInterface.chat_async`` methods. The currect limitation is that keys cannot have another ``BaseModel`` as value
+only ``List[BaseModel]`` is allowed.
 
 
 .. toctree::

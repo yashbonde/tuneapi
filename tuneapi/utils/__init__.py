@@ -53,6 +53,7 @@ from tuneapi.utils.randomness import (
     get_random_string,
     get_snowflake,
     reservoir_sampling,
+    sample,
 )
 from tuneapi.utils.serdeser import (
     dict_to_structpb,

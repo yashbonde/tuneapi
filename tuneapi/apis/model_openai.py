@@ -9,6 +9,7 @@ import httpx
 import requests
 from PIL import Image
 from io import BytesIO
+from copy import deepcopy
 from typing import Optional, Any, List, Dict, Tuple
 
 import tuneapi.utils as tu
@@ -70,6 +71,7 @@ class Openai(tt.ModelInterface):
         temperature: float = 1,
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
         **kwargs,
@@ -91,7 +93,15 @@ class Openai(tt.ModelInterface):
             if m.role == tt.Message.SYSTEM:
                 final_messages.append({"role": "system", "content": m.value})
             elif m.role == tt.Message.HUMAN:
-                content = [{"type": "text", "text": m.value}]
+                if isinstance(m.value, str):
+                    content = [{"type": "text", "text": m.value}]
+                elif isinstance(m.value, list):
+                    content = deepcopy(m.value)
+                else:
+                    raise Exception(
+                        f"Unknown message type. Got: '{type(m.value)}', expected 'List[Dict[str, Any]]' or 'str'"
+                    )
+
                 for img in m.images:
                     content.append(
                         {
@@ -101,7 +111,15 @@ class Openai(tt.ModelInterface):
                     )
                 final_messages.append({"role": "user", "content": content})
             elif m.role == tt.Message.GPT:
-                content = [{"type": "text", "text": m.value}]
+                if isinstance(m.value, str):
+                    content = [{"type": "text", "text": m.value}]
+                elif isinstance(m.value, list):
+                    content = deepcopy(m.value)
+                else:
+                    raise Exception(
+                        f"Unknown message type. Got: '{type(m.value)}', expected 'List[Dict[str, Any]]' or 'str'"
+                    )
+
                 for img in m.images:
                     content.append(
                         {
@@ -151,6 +169,7 @@ class Openai(tt.ModelInterface):
             "messages": final_messages,
             "model": model or self.model_id,
             "stream": True,
+            "stream_options": {"include_usage": usage},
         }
         if max_tokens:
             data["max_tokens"] = max_tokens
@@ -160,10 +179,15 @@ class Openai(tt.ModelInterface):
             ]
             data["parallel_tool_calls"] = parallel_tool_calls
         if isinstance(chats, tt.Thread) and chats.schema:
+            resp_schema = chats.schema.model_json_schema()
+            resp_schema["additionalProperties"] = False
+            for _, defs in resp_schema.get("$defs", dict()).items():
+                defs["additionalProperties"] = False
             data["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    "schema": chats.schema.model_json_schema(),
+                    "strict": True,
+                    "schema": resp_schema,
                     "name": "chat",
                 },
             }
@@ -178,7 +202,7 @@ class Openai(tt.ModelInterface):
 
         return headers, data
 
-    def _process_output(self, raw: bool, lines_fn: callable):
+    def _process_output(self, raw: bool, lines_fn: callable, yield_usage: bool = False):
         fn_call = None
         for line in lines_fn():
             if isinstance(line, bytes):
@@ -187,12 +211,18 @@ class Openai(tt.ModelInterface):
                 yield line
                 continue
 
-            line = line.strip()
+            if line.endswith("[DONE]"):
+                break
+
             if line:
-                try:
-                    x = tu.from_json(line.replace("data: ", ""))["choices"][0]["delta"]
+                # print(line)
+                resp = tu.from_json(line.replace("data: ", ""))
+                choices = resp.get("choices", [])
+                if len(choices):
+                    x = resp["choices"][0]["delta"]
                     if "tool_calls" not in x:
-                        yield x["content"]
+                        if "content" in x:
+                            yield x["content"]
                     else:
                         y = x["tool_calls"][0]["function"]
                         if fn_call is None:
@@ -202,8 +232,15 @@ class Openai(tt.ModelInterface):
                             }
                         else:
                             fn_call["arguments"] += y["arguments"]
-                except:
-                    break
+                elif "usage" in resp and yield_usage:
+                    usage = resp["usage"]
+                    yield tt.Usage(
+                        input_tokens=usage.pop("prompt_tokens"),
+                        output_tokens=usage.pop("completion_tokens"),
+                        cached_tokens=usage["prompt_tokens_details"]["cached_tokens"],
+                        **usage,
+                    )
+
         if fn_call:
             fn_call["arguments"] = tu.from_json(fn_call["arguments"])
             yield fn_call
@@ -219,6 +256,7 @@ class Openai(tt.ModelInterface):
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
         timeout=(5, 60),
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
         raw: bool = False,
@@ -231,6 +269,7 @@ class Openai(tt.ModelInterface):
             temperature=temperature,
             parallel_tool_calls=parallel_tool_calls,
             token=token,
+            usage=usage,
             extra_headers=extra_headers,
             debug=debug,
             **kwargs,
@@ -248,7 +287,11 @@ class Openai(tt.ModelInterface):
             yield response.text
             raise e
 
-        yield from self._process_output(raw, response.iter_lines)
+        yield from self._process_output(
+            raw=raw,
+            lines_fn=response.iter_lines,
+            yield_usage=usage,
+        )
 
     def chat(
         self,
@@ -258,10 +301,12 @@ class Openai(tt.ModelInterface):
         temperature: float = 1,
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> Any:
         output = ""
+        usage_obj = None
         try:
             for x in self.stream_chat(
                 chats=chats,
@@ -276,6 +321,8 @@ class Openai(tt.ModelInterface):
             ):
                 if isinstance(x, dict):
                     output = x
+                elif isinstance(x, tt.Usage):
+                    usage_obj = x
                 else:
                     output += x
         except requests.HTTPError as e:
@@ -284,7 +331,9 @@ class Openai(tt.ModelInterface):
 
         if isinstance(chats, tt.Thread) and chats.schema:
             output = chats.schema(**tu.from_json(output))
-            return output
+
+        if usage:
+            return output, usage_obj
         return output
 
     async def stream_chat_async(
@@ -296,6 +345,7 @@ class Openai(tt.ModelInterface):
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
         timeout=(5, 60),
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
         raw: bool = False,
@@ -308,6 +358,7 @@ class Openai(tt.ModelInterface):
             temperature=temperature,
             parallel_tool_calls=parallel_tool_calls,
             token=token,
+            usage=usage,
             extra_headers=extra_headers,
             debug=debug,
             **kwargs,
@@ -328,7 +379,9 @@ class Openai(tt.ModelInterface):
 
             async for chunk in response.aiter_bytes():
                 for x in self._process_output(
-                    raw=raw, lines_fn=chunk.decode("utf-8").splitlines
+                    raw=raw,
+                    lines_fn=chunk.decode("utf-8").splitlines,
+                    yield_usage=usage,
                 ):
                     yield x
 
@@ -340,10 +393,12 @@ class Openai(tt.ModelInterface):
         temperature: float = 1,
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         **kwargs,
     ) -> Any:
         output = ""
+        usage_obj = None
         async for x in self.stream_chat_async(
             chats=chats,
             model=model,
@@ -357,11 +412,15 @@ class Openai(tt.ModelInterface):
         ):
             if isinstance(x, dict):
                 output = x
+            elif isinstance(x, tt.Usage):
+                usage_obj = x
             else:
                 output += x
         if isinstance(chats, tt.Thread) and chats.schema:
             output = chats.schema(**tu.from_json(output))
-            return output
+
+        if usage:
+            return output, usage_obj
         return output
 
     def distributed_chat(

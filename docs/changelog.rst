@@ -7,6 +7,16 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.2
+-----
+
+- Added usage tracking for OpenAI and Anthropic
+
+8.0.1
+-----
+
+- Typo so now we are in 8.x.x series
+- Fix bug in structured generation for ``Openai``.
 
 0.8.0
 -----
