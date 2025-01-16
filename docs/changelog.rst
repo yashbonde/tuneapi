@@ -7,6 +7,13 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.3
+-----
+
+- Fix bug in ``tools`` that was causing ever increasing number of tools in the ``Thread`` object
+- OpenAI protocol abstracted away as a ``OpenAIProtocol`` class in ``tuneapi.apis.openai``. This is to make it easier to
+  add new endpoints in the future.
+
 8.0.2
 -----
 

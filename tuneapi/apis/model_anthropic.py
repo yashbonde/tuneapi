@@ -143,7 +143,7 @@ class Anthropic(tt.ModelInterface):
         # return headers, system.strip(), claude_messages
 
         tools = []
-        if isinstance(chats, tt.Thread):
+        if isinstance(chats, tt.Thread) and chats.tools:
             tools = [x.to_dict() for x in chats.tools]
             for t in tools:
                 t["input_schema"] = t.pop("parameters")
@@ -236,7 +236,7 @@ class Anthropic(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: Optional[float] = None,
         token: Optional[str] = None,
         usage: bool = False,
@@ -317,7 +317,7 @@ class Anthropic(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: Optional[float] = None,
         token: Optional[str] = None,
         usage: bool = False,

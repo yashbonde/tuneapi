@@ -138,7 +138,7 @@ class Gemini(tt.ModelInterface):
 
         # create the body
         tools = []
-        if isinstance(chats, tt.Thread):
+        if isinstance(chats, tt.Thread) and chats.tools:
             tools = [x.to_dict() for x in chats.tools]
         extra_headers = extra_headers or self.extra_headers
         if extra_headers:

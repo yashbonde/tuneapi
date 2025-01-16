@@ -17,38 +17,26 @@ import tuneapi.types as tt
 from tuneapi.apis.turbo import distributed_chat, distributed_chat_async
 
 
-class Openai(tt.ModelInterface):
+class OpenAIProtocol(tt.ModelInterface):
     def __init__(
         self,
-        id: str = "gpt-4o",
-        base_url: str = "https://api.openai.com/v1/chat/completions",
-        extra_headers: Optional[Dict[str, str]] = None,
-        api_token: Optional[str] = None,
-        emebdding_url: Optional[str] = None,
-        image_gen_url: Optional[str] = None,
-        audio_transcribe: Optional[str] = None,
-        audio_gen_url: Optional[str] = None,
+        id: str,
+        base_url: str,
+        extra_headers: Optional[Dict[str, str]],
+        api_token: Optional[str],
+        emebdding_url: Optional[str],
+        image_gen_url: Optional[str],
+        audio_transcribe_url: Optional[str],
+        audio_gen_url: Optional[str],
     ):
         self.model_id = id
         self.base_url = base_url
-        self.api_token = api_token or tu.ENV.OPENAI_TOKEN("")
+        self.api_token = api_token
         self.extra_headers = extra_headers
-        self.emebdding_url = emebdding_url or base_url.replace(
-            "/chat/completions",
-            "/embeddings",
-        )
-        self.image_gen_url = image_gen_url or base_url.replace(
-            "/chat/completions",
-            "/images/generations",
-        )
-        self.audio_transcribe_url = audio_transcribe or base_url.replace(
-            "/chat/completions",
-            "/audio/transcriptions",
-        )
-        self.audio_gen_url = audio_gen_url or base_url.replace(
-            "/chat/completions",
-            "/audio/speech",
-        )
+        self.emebdding_url = emebdding_url
+        self.image_gen_url = image_gen_url
+        self.audio_transcribe_url = audio_transcribe_url
+        self.audio_gen_url = audio_gen_url
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -875,7 +863,47 @@ class Openai(tt.ModelInterface):
 # Other OpenAI compatible models
 
 
-class Mistral(Openai):
+class Openai(OpenAIProtocol):
+    def __init__(
+        self,
+        id: str = "gpt-4o",
+        base_url: str = "https://api.openai.com/v1/chat/completions",
+        extra_headers: Optional[Dict[str, str]] = None,
+        api_token: Optional[str] = None,
+        emebdding_url: Optional[str] = None,
+        image_gen_url: Optional[str] = None,
+        audio_transcribe: Optional[str] = None,
+        audio_gen_url: Optional[str] = None,
+    ):
+        super().__init__(
+            id=id,
+            base_url=base_url,
+            api_token=api_token or tu.ENV.OPENAI_TOKEN(""),
+            extra_headers=extra_headers,
+            emebdding_url=emebdding_url
+            or base_url.replace(
+                "/chat/completions",
+                "/embeddings",
+            ),
+            image_gen_url=image_gen_url
+            or base_url.replace(
+                "/chat/completions",
+                "/images/generations",
+            ),
+            audio_transcribe_url=audio_transcribe
+            or base_url.replace(
+                "/chat/completions",
+                "/audio/transcriptions",
+            ),
+            audio_gen_url=audio_gen_url
+            or base_url.replace(
+                "/chat/completions",
+                "/audio/speech",
+            ),
+        )
+
+
+class Mistral(OpenAIProtocol):
     """
     A class to interact with Mistral's Large Language Models (LLMs) via their API. Note this class does not contain the
     `embedding` method.
@@ -905,13 +933,17 @@ class Mistral(Openai):
             base_url=base_url,
             extra_headers=extra_headers,
             api_token=api_token or tu.ENV.MISTRAL_TOKEN(),
+            emebdding_url=None,
+            image_gen_url=None,
+            audio_transcribe_url=None,
+            audio_gen_url=None,
         )
 
     def embedding(*a, **k):
         raise NotImplementedError("Mistral does not support embeddings")
 
 
-class Groq(Openai):
+class Groq(OpenAIProtocol):
     """
     A class to interact with Groq's Large Language Models (LLMs) via their API. Note this class does not contain the
     `embedding` method.
@@ -938,13 +970,17 @@ class Groq(Openai):
             base_url=base_url,
             extra_headers=extra_headers,
             api_token=api_token or tu.ENV.GROQ_TOKEN(),
+            emebdding_url=None,
+            image_gen_url=None,
+            audio_transcribe_url=None,
+            audio_gen_url=None,
         )
 
     def embedding(*a, **k):
         raise NotImplementedError("Groq does not support embeddings")
 
 
-class TuneModel(Openai):
+class TuneModel(OpenAIProtocol):
     """
     A class to interact with Groq's Large Language Models (LLMs) via their API.
 
@@ -978,6 +1014,9 @@ class TuneModel(Openai):
             extra_headers=extra_headers,
             api_token=api_token or tu.ENV.TUNEAPI_TOKEN(),
             emebdding_url="https://proxy.tune.app/v1/embeddings",
+            image_gen_url=None,
+            audio_transcribe_url=None,
+            audio_gen_url=None,
         )
 
     def embedding(

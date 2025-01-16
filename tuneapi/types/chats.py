@@ -483,7 +483,7 @@ class Usage:
         self,
         input_tokens: int,
         output_tokens: int,
-        cached_tokens: int,
+        cached_tokens: Optional[int] = 0,
         **kwargs,
     ):
         self.input_tokens = input_tokens
@@ -497,6 +497,20 @@ class Usage:
 
     def __repr__(self) -> str:
         return f"<Usage: {self.input_tokens} [Cached: {self.cached_tokens}] -> {self.output_tokens}>"
+
+    def __radd__(self, other: "Usage"):
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+        )
+
+    def __add__(self, other: "Usage"):
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+        )
 
     def to_json(self, *a, **k) -> str:
         return tu.to_json(self.__dict__, *a, **k)
