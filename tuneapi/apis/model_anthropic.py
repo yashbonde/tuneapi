@@ -7,7 +7,7 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 import httpx
 import requests
 from copy import deepcopy
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -24,35 +24,27 @@ class Anthropic(tt.ModelInterface):
     ):
         self.model_id = id
         self.base_url = base_url
+        self.batch_url = base_url + "/batches"
         self.api_token = api_token or tu.ENV.ANTHROPIC_TOKEN("")
         self.extra_headers = extra_headers
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
 
-    def _process_input(
-        self,
-        chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 1024,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
-        debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        **kwargs,
-    ):
+    def _process_header(self, token: str) -> Dict[str, str]:
         if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Please set ANTHROPIC_TOKEN environment variable or pass through function"
             )
         token = token or self.api_token
-        if isinstance(chats, tt.Thread):
-            thread = chats
-        elif isinstance(chats, str):
-            thread = tt.Thread(tt.human(chats))
-        else:
-            raise Exception("Invalid input")
+        return {
+            "x-api-key": token,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "tools-2024-05-16",
+        }
 
+    def _process_thread(self, thread: tt.Thread) -> Tuple[str, List[Dict[str, Any]]]:
         # create the anthropic style data
         system = ""
         if thread.chats[0].role == tt.Message.SYSTEM:
@@ -134,13 +126,29 @@ class Anthropic(tt.ModelInterface):
                 raise Exception(f"Unknown role: {m.role}")
             claude_messages.append(msg)
 
-        headers = {
-            "x-api-key": token,
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": "tools-2024-05-16",
-        }
-        # return headers, system.strip(), claude_messages
+        return system, claude_messages
+
+    def _process_input(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 1024,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        stream: bool = True,
+        **kwargs,
+    ):
+        if isinstance(chats, tt.Thread):
+            thread = chats
+        elif isinstance(chats, str):
+            thread = tt.Thread(tt.human(chats))
+        else:
+            raise Exception("Invalid input")
+
+        system, claude_messages = self._process_thread(thread)
+        headers = self._process_header(token)
 
         tools = []
         if isinstance(chats, tt.Thread) and chats.tools:
@@ -157,7 +165,7 @@ class Anthropic(tt.ModelInterface):
             "messages": claude_messages,
             "system": system,
             "tools": tools,
-            "stream": True,
+            "stream": stream,
         }
         if temperature:
             data["temperature"] = temperature
@@ -274,7 +282,7 @@ class Anthropic(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: Optional[float] = None,
         token: Optional[str] = None,
         debug: bool = False,
@@ -355,7 +363,7 @@ class Anthropic(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = 4096,
         temperature: Optional[float] = None,
         token: Optional[str] = None,
         debug: bool = False,
@@ -439,3 +447,131 @@ class Anthropic(tt.ModelInterface):
             debug=debug,
             **kwargs,
         )
+
+    def submit_batch(
+        self,
+        threads: List[tt.Thread | str],
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout=(5, 30),
+        raw: bool = False,
+        **kwargs,
+    ) -> Tuple[str, List[str]] | Dict:
+        bodies = []
+        custom_ids = []
+        for chats in threads:
+            headers, data = self._process_input(
+                chats=chats,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                token=token,
+                extra_headers=extra_headers,
+                stream=False,
+                **kwargs,
+            )
+            custom_id = "tuneapi_" + tu.get_random_string(10)
+            custom_ids.append(custom_id)
+            bodies.append({"custom_id": custom_id, "params": data})
+        body = {"requests": bodies}
+        if debug:
+            fp = "sample_anthropic_batch.json"
+            print("Saving at path " + fp)
+            tu.to_json(body, fp=fp)
+
+        r = requests.post(
+            url=self.batch_url,
+            headers=headers,
+            timeout=timeout,
+            json=body,
+        )
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Coudn't submit batch: {r.text}")
+            raise e
+        resp = r.json()
+
+        if raw:
+            return resp
+        return resp["id"], custom_ids
+
+    def get_batch(
+        self,
+        batch_id: str,
+        custom_ids: Optional[List[str]] = None,
+        usage: bool = False,
+        token: Optional[str] = None,
+        raw: bool = False,
+        verbose: bool = False,
+    ) -> Tuple[List[Any] | Dict, str | None]:
+        headers = self._process_header(token)
+        r = requests.get(self.batch_url + "/" + batch_id, headers=headers)
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Coudn't get batch: {r.text}")
+            raise e
+        resp = r.json()
+        if resp["processing_status"] != "ended":
+            if verbose:
+                tu.logger.info(
+                    f"Batch {batch_id} has not ended. Status: {resp['processing_status']}"
+                )
+            return None, resp["processing_status"]
+        results_url = resp["results_url"]
+
+        # fetch the results, response is a JSONL, fucntion return shoudl be a List of JSONs
+        r = requests.get(results_url, headers=headers)
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Coudn't get batch results: {r.text}")
+            raise e
+
+        output = []
+        for line in r.iter_lines():
+            if not line:
+                continue
+            output.append(tu.from_json(line))
+
+        if custom_ids:
+            # each item in output has a key called "custom_id" sort on the basis of incoming custom_ids
+            output = sorted(output, key=lambda x: custom_ids.index(x["custom_id"]))
+
+        if raw:
+            return output, None
+
+        _usage = tt.Usage(0, 0)
+        for o in output:
+            u = o["result"]["message"]["usage"]
+            _usage += tt.Usage(
+                input_tokens=u.pop("input_tokens"),
+                output_tokens=u.pop("output_tokens"),
+                cached_tokens=u.get("cache_read_input_tokens", 0)
+                or u.get("cache_creation_input_tokens", 0),
+                **u,
+            )
+
+        parsed_output = [o["result"]["message"]["content"][0] for o in output]
+        final_output = []
+        for o in parsed_output:
+            if o["type"] == "text":
+                final_output.append(o["text"])
+            elif o["type"] == "tool_use":
+                final_output.append(
+                    {
+                        "name": o["name"],
+                        "arguments": o["input"],
+                    }
+                )
+            else:
+                raise ValueError(f"Unknown message content: {o['type']}")
+
+        if usage:
+            return final_output, None, _usage
+        return final_output, None

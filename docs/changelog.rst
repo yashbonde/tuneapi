@@ -7,6 +7,20 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.5
+-----
+
+- Adding support for Batches API in Openai and Anthropic models
+  - Have not tested function calling on batches API
+  - Have not tested structured generation on batches API
+- Removed dependency on ``openai`` package for audio transcribing by figuring out uploading of files
+- Added new ``Ollama`` class which works with ``OpenAIProtocol``
+
+8.0.4
+-----
+
+- Bug fixes
+
 8.0.3
 -----
 

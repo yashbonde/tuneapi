@@ -28,6 +28,8 @@ class OpenAIProtocol(tt.ModelInterface):
         image_gen_url: Optional[str],
         audio_transcribe_url: Optional[str],
         audio_gen_url: Optional[str],
+        batch_url: Optional[str],
+        files_url: Optional[str],
     ):
         self.model_id = id
         self.base_url = base_url
@@ -37,6 +39,8 @@ class OpenAIProtocol(tt.ModelInterface):
         self.image_gen_url = image_gen_url
         self.audio_transcribe_url = audio_transcribe_url
         self.audio_gen_url = audio_gen_url
+        self.batch_url = batch_url
+        self.files_url = files_url
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -51,30 +55,7 @@ class OpenAIProtocol(tt.ModelInterface):
             "Content-Type": content_type,
         }
 
-    def _process_input(
-        self,
-        chats,
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
-        usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        debug: bool = False,
-        **kwargs,
-    ):
-        if not token and not self.api_token:  # type: ignore
-            raise Exception(
-                "OpenAI API key not found. Please set OPENAI_TOKEN environment variable or pass through function"
-            )
-        if isinstance(chats, tt.Thread):
-            thread = chats
-        elif isinstance(chats, str):
-            thread = tt.Thread(tt.human(chats))
-        else:
-            raise Exception("Invalid input")
-
+    def _process_thread(self, thread: tt.Thread) -> List[Dict[str, Any]]:
         prev_tool_id = tu.get_random_string(5)
         final_messages = []
         for i, m in enumerate(thread.chats):
@@ -145,9 +126,35 @@ class OpenAIProtocol(tt.ModelInterface):
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
             else:
                 raise Exception(f"Invalid message role: {m.role}")
+        return final_messages
 
+    def _process_input(
+        self,
+        chats,
+        model: Optional[str] = None,
+        max_tokens: int = None,
+        temperature: Optional[float] = None,
+        parallel_tool_calls: bool = False,
+        token: Optional[str] = None,
+        usage: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        stream: bool = True,
+        **kwargs,
+    ):
+        if not token and not self.api_token:  # type: ignore
+            raise Exception(
+                "OpenAI API key not found. Please set OPENAI_TOKEN environment variable or pass through function"
+            )
+        if isinstance(chats, tt.Thread):
+            thread = chats
+        elif isinstance(chats, str):
+            thread = tt.Thread(tt.human(chats))
+        else:
+            raise Exception("Invalid input")
+
+        final_messages = self._process_thread(thread)
         headers = self._process_header(token)
-        # return headers, final_messages
 
         extra_headers = extra_headers or self.extra_headers
         if extra_headers:
@@ -156,9 +163,10 @@ class OpenAIProtocol(tt.ModelInterface):
             "temperature": temperature,
             "messages": final_messages,
             "model": model or self.model_id,
-            "stream": True,
-            "stream_options": {"include_usage": usage},
+            "stream": stream,
         }
+        if stream:
+            data["stream_options"] = {"include_usage": usage}
         if max_tokens:
             data["max_tokens"] = max_tokens
         if isinstance(chats, tt.Thread) and len(chats.tools):
@@ -497,6 +505,11 @@ class OpenAIProtocol(tt.ModelInterface):
         timeout: Tuple[int, int] = (5, 60),
     ) -> tt.EmbeddingGen:
         """If you pass a list then returned items are in the insertion order"""
+        if self.emebdding_url is None:
+            raise ValueError(
+                "Embedding URL is not set. Does this model support embeddings?"
+            )
+
         headers, data = self._prepare_embedding_input(
             chats=chats,
             model=model,
@@ -539,6 +552,11 @@ class OpenAIProtocol(tt.ModelInterface):
         extra_headers: Optional[Dict[str, str]] = None,
     ) -> tt.EmbeddingGen:
         """If you pass a list then returned items are in the insertion order"""
+        if self.emebdding_url is None:
+            raise ValueError(
+                "Embedding URL is not set. Does this model support embeddings?"
+            )
+
         headers, data = self._prepare_embedding_input(
             chats=chats,
             model=model,
@@ -623,6 +641,11 @@ class OpenAIProtocol(tt.ModelInterface):
         **kwargs,
     ) -> tt.ImageGen:
 
+        if self.image_gen_url is None:
+            raise ValueError(
+                "Image Generation URL is not set. Does this model support image generation?"
+            )
+
         headers, data = self._prepare_image_gen_input(
             prompt=prompt,
             style=style,
@@ -671,6 +694,11 @@ class OpenAIProtocol(tt.ModelInterface):
         **kwargs,
     ) -> Image:
 
+        if self.image_gen_url is None:
+            raise ValueError(
+                "Image Generation URL is not set. Does this model support image generation?"
+            )
+
         headers, data = self._prepare_image_gen_input(
             prompt=prompt,
             style=style,
@@ -712,33 +740,17 @@ class OpenAIProtocol(tt.ModelInterface):
         audio: str,
         model="whisper-1",
         timestamp_granularities=["segment"],
+        token: Optional[str] = None,
+        timeout: Tuple[int, int] = (5, 300),
         **kwargs,
     ) -> tt.Transcript:
-        """
-        Translates audio using the OpenAI API. Unfortunately, I couldn't figure out how to get this working with the
-        python requests library, so I'm using the openai library instead. For both of our sake let's hope ``openai``
-        is stable long enough.
-
-        Args:
-            prompt (str): The instruction prompt to guide the translation.
-            audio (str): The path to the audio file to translate.
-            model (str): The model to use for translation.
-            response_format (str): The format of the response. Possible values are "json", "text", "srt",
-                "verbose_json", or "vtt". Defaults to "json".
-            timestamp_granularities (List[str]): The timestamp granularities to include in the response. Defaults to ["segment"].
-
-        Returns:
-            The translated text as a string, or None if an error occurs.
-        """
-
-        try:
-            import openai
-        except ImportError:
-            raise ImportError(
-                "Please install the OpenAI API package to use `speech_to_text`"
+        if self.audio_transcribe_url is None:
+            raise ValueError(
+                "Audio Transcription URL is not set. Does this model support audio transcription?"
             )
 
-        import openai
+        headers = self._process_header(token=token)
+        headers.pop("Content-Type")
 
         if not (isinstance(audio, str) and os.path.exists(audio)):
             raise ValueError("Invalid audio file path")
@@ -747,21 +759,31 @@ class OpenAIProtocol(tt.ModelInterface):
         if tu.file_size(audio) / (1024 * 1024) > 25:
             raise ValueError("Audio file size should be less than 25 MB")
 
-        file = open(audio, "rb")
+        with open(audio, "rb") as f:
+            files = {"file": (os.path.basename(audio), f)}
+            data = {
+                "model": model,
+                "prompt": prompt,
+                "response_format": "vtt",
+                "timestamp_granularities": timestamp_granularities,
+            }
+            if kwargs:
+                data.update(kwargs)
+            r = requests.post(
+                url=self.audio_transcribe_url,
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=timeout,
+            )
 
-        data = {
-            "model": model,
-            "prompt": prompt,
-            "response_format": "vtt",
-            "timestamp_granularities": timestamp_granularities,
-        }
-        if kwargs:
-            data.update(kwargs)
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Could not transcribe audio: {r.text}")
+            raise e
 
-        out = openai.audio.transcriptions.create(file=file, **data)
-
-        file.close()
-        return tt.get_transcript(text=out)
+        return tt.get_transcript(text=r.content.decode("utf-8"))
 
     def _prepare_audio_gen_input(
         self,
@@ -795,6 +817,11 @@ class OpenAIProtocol(tt.ModelInterface):
         timeout: Tuple[int, int] = (5, 60),
         **kwargs,
     ) -> bytes:
+
+        if self.audio_gen_url is None:
+            raise ValueError(
+                "Audio Generation URL is not set. Does this model support audio generation?"
+            )
 
         headers, data = self._prepare_audio_gen_input(
             prompt=prompt,
@@ -832,6 +859,11 @@ class OpenAIProtocol(tt.ModelInterface):
         **kwargs,
     ) -> bytes:
 
+        if self.audio_gen_url is None:
+            raise ValueError(
+                "Audio Generation URL is not set. Does this model support audio generation?"
+            )
+
         headers, data = self._prepare_audio_gen_input(
             prompt=prompt,
             voice=voice,
@@ -859,6 +891,243 @@ class OpenAIProtocol(tt.ModelInterface):
 
             return r.content
 
+    # Submit batches
+
+    def submit_batch(
+        self,
+        threads: List[tt.Thread | str],
+        model: Optional[str] = None,
+        endpoint: str = "/v1/chat/completions",
+        max_tokens: int = None,
+        temperature: float = 1,
+        parallel_tool_calls: bool = False,
+        token: Optional[str] = None,
+        usage: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        timeout=(5, 60),
+        raw: bool = False,
+        verbose: bool = False,
+        **kwargs,
+    ) -> Tuple[str, List[str]] | Dict:
+        if self.batch_url is None:
+            raise ValueError("Batch URL is not set. Does this model support batches?")
+
+        headers = self._process_header(token)
+        headers.pop("Content-Type")
+
+        # create the bodies
+        bodies = []
+        custom_ids = []
+        for chats in threads:
+            _, data = self._process_input(
+                chats=chats,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                parallel_tool_calls=parallel_tool_calls,
+                token=token,
+                usage=usage,
+                extra_headers=extra_headers,
+                debug=debug,
+                stream=False,
+                **kwargs,
+            )
+            custom_id = "tuneapi_" + tu.get_random_string(10)
+            custom_ids.append(custom_id)
+            bodies.append(
+                {
+                    "custom_id": custom_id,
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": data,
+                }
+            )
+
+        # upload the file
+        fp = f"./tuneapi_batch_{tu.SimplerTimes.get_now_float()}.jsonl"
+        if verbose:
+            tu.logger.info("Creating temporary file at " + fp)
+        tu.to_json(bodies, fp)
+
+        with open(fp, "rb") as f:
+            files = {"file": (os.path.basename(fp), f)}
+            data = {"purpose": "batch"}
+            response = requests.post(
+                url=self.files_url,
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=timeout,
+            )
+
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Could not upload file: {response.text}")
+            raise e
+        finally:
+            if verbose:
+                tu.logger.info("Removing temporary JSONL file")
+            os.remove(fp)
+
+        data = response.json()
+        file_id = data["id"]
+
+        # Now submit the batch
+        body = {
+            "input_file_id": file_id,
+            "endpoint": endpoint,
+            "completion_window": "24h",
+        }
+        headers = self._process_header(token)
+        if debug:
+            tu.logger.info("Saving batch at path batch_oai.json")
+            tu.to_json(body, fp="batch_oai.json")
+
+        r = requests.post(
+            url=self.batch_url,
+            headers=headers,
+            json=body,
+            timeout=timeout,
+        )
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Coudn't submit batch: {r.text}")
+            raise e
+
+        resp = r.json()
+        if raw:
+            return resp
+        return resp["id"], custom_ids
+
+    def get_batch(
+        self,
+        batch_id: str,
+        custom_ids: Optional[List[str]] = None,
+        usage: bool = False,
+        token: Optional[str] = None,
+        raw: bool = False,
+        verbose: bool = False,
+    ):
+        if self.batch_url is None:
+            raise ValueError("Batch URL is not set. Does this model support batches?")
+
+        headers = self._process_header(token)
+        r = requests.get(self.batch_url + "/" + batch_id, headers=headers)
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Coudn't get batch: {r.text}")
+            raise e
+        resp = r.json()
+
+        if resp["status"] in ["failed", "expired", "cancelled"]:
+            if verbose:
+                tu.logger.info(
+                    f"Batch {batch_id} has ended unsuccesfully. Status: {resp['processing_status']}"
+                )
+            return None, resp["status"]
+        elif resp["status"] != "completed":
+            if verbose:
+                tu.logger.info(
+                    f"Batch {batch_id} has not ended. Status: {resp['processing_status']}"
+                )
+            return None, resp["status"]
+
+        # get the results
+        results_file = resp["output_file_id"]
+        r = requests.get(
+            self.files_url + "/" + results_file + "/content",
+            headers=headers,
+        )
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Coudn't get batch results: {r.text}")
+            raise e
+
+        output = []
+        for line in r.iter_lines():
+            if not line:
+                continue
+            output.append(tu.from_json(line))
+
+        if custom_ids:
+            # each item in output has a key called "custom_id" sort on the basis of incoming custom_ids
+            output = sorted(output, key=lambda x: custom_ids.index(x["custom_id"]))
+
+        if raw:
+            return output, None
+
+        # {
+        #     "id": "batch_req_679b77b2dabc819093e6cb800a390656",
+        #     "custom_id": "tuneapi_phrD3LUIrq",
+        #     "response": {
+        #         "status_code": 200,
+        #         "request_id": "fd4e82075565ba919be2d78047d991da",
+        #         "body": {
+        #             "id": "chatcmpl-AvOPKrquzCElPn2Fi5HvBkxWWqR9r",
+        #             "object": "chat.completion",
+        #             "created": 1738241882,
+        #             "model": "gpt-4o-2024-08-06",
+        #             "choices": [
+        #                 {
+        #                     "index": 0,
+        #                     "message": {
+        #                         "role": "assistant",
+        #                         "content": "2 + 2 equals 4.",
+        #                         "refusal": None,
+        #                     },
+        #                     "logprobs": None,
+        #                     "finish_reason": "stop",
+        #                 }
+        #             ],
+        #             "usage": {
+        #                 "prompt_tokens": 15,
+        #                 "completion_tokens": 9,
+        #                 "total_tokens": 24,
+        #                 "prompt_tokens_details": {
+        #                     "cached_tokens": 0,
+        #                     "audio_tokens": 0,
+        #                 },
+        #                 "completion_tokens_details": {
+        #                     "reasoning_tokens": 0,
+        #                     "audio_tokens": 0,
+        #                     "accepted_prediction_tokens": 0,
+        #                     "rejected_prediction_tokens": 0,
+        #                 },
+        #             },
+        #             "service_tier": "default",
+        #             "system_fingerprint": "fp_4691090a87",
+        #         },
+        #     },
+        #     "error": None,
+        # }
+
+        _usage = tt.Usage(0, 0)
+        for o in output:
+            u = o["response"]["body"]["usage"]
+            _usage += tt.Usage(
+                input_tokens=u.pop("prompt_tokens"),
+                output_tokens=u.pop("completion_tokens"),
+                cached_tokens=u["prompt_tokens_details"]["cached_tokens"],
+                **u,
+            )
+
+        parsed_output = [o["response"]["body"]["choices"][0]["message"] for o in output]
+        final_output = []
+        for o in parsed_output:
+            if "tool_calls" in o:
+                final_output.append(o["tool_calls"][0]["function"])
+            elif "content" in o:
+                final_output.append(o["content"])
+
+        if usage:
+            return final_output, None, _usage
+        return final_output, None
+
 
 # Other OpenAI compatible models
 
@@ -874,6 +1143,8 @@ class Openai(OpenAIProtocol):
         image_gen_url: Optional[str] = None,
         audio_transcribe: Optional[str] = None,
         audio_gen_url: Optional[str] = None,
+        batch_url: Optional[str] = None,
+        files_url: Optional[str] = None,
     ):
         super().__init__(
             id=id,
@@ -899,6 +1170,16 @@ class Openai(OpenAIProtocol):
             or base_url.replace(
                 "/chat/completions",
                 "/audio/speech",
+            ),
+            batch_url=batch_url
+            or base_url.replace(
+                "/chat/completions",
+                "/batches",
+            ),
+            files_url=files_url
+            or base_url.replace(
+                "/chat/completions",
+                "/files",
             ),
         )
 
@@ -937,6 +1218,8 @@ class Mistral(OpenAIProtocol):
             image_gen_url=None,
             audio_transcribe_url=None,
             audio_gen_url=None,
+            batch_url=None,
+            files_url=None,
         )
 
     def embedding(*a, **k):
@@ -974,6 +1257,8 @@ class Groq(OpenAIProtocol):
             image_gen_url=None,
             audio_transcribe_url=None,
             audio_gen_url=None,
+            batch_url=None,
+            files_url=None,
         )
 
     def embedding(*a, **k):
@@ -1017,6 +1302,8 @@ class TuneModel(OpenAIProtocol):
             image_gen_url=None,
             audio_transcribe_url=None,
             audio_gen_url=None,
+            batch_url=None,
+            files_url=None,
         )
 
     def embedding(
@@ -1053,4 +1340,24 @@ class TuneModel(OpenAIProtocol):
             timeout=timeout,
             raw=raw,
             extra_headers=extra_headers,
+        )
+
+
+class Ollama(OpenAIProtocol):
+    def __init__(
+        self,
+        id: str,
+        base_url: str = "http://localhost:11434/v1/chat/completions",
+    ):
+        super().__init__(
+            id=id,
+            base_url=base_url,
+            api_token="ollama",
+            extra_headers={},
+            emebdding_url=None,
+            image_gen_url=None,
+            audio_transcribe_url=None,
+            audio_gen_url=None,
+            batch_url=None,
+            files_url=None,
         )

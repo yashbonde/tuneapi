@@ -29,9 +29,6 @@ def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:
     else:
         kwargs["indent"] = indent
     if fp:
-        if fp.endswith(".json"):
-            with open(fp, "w") as f:
-                f.write(json.dumps(x, **kwargs))
         if fp.endswith(".jsonl"):
             with open(fp, "w") as f:
                 for y in x:
@@ -39,6 +36,9 @@ def to_json(x: dict, fp: str = "", indent=2, tight: bool = False) -> str:
                     kwargs["separators"] = (",", ":")  # type: ignore
                     kwargs["indent"] = None
                     f.write(json.dumps(y, **kwargs) + "\n")
+        else:
+            with open(fp, "w") as f:
+                f.write(json.dumps(x, **kwargs))
     else:
         return json.dumps(x, **kwargs)
 

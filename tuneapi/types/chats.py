@@ -46,9 +46,9 @@ class Tool:
         def __init__(
             self,
             name: str,
-            description: str,
             type: str,
             required: bool = False,
+            description: Optional[str] = "",
             items: Optional[Dict] = None,
             enum: Optional[List[str]] = None,
         ):
@@ -477,6 +477,35 @@ class ModelInterface:
         """This is the async function to convert speech to text"""
         raise NotImplementedError("This model has no operation for this.")
 
+    # batching
+
+    def submit_batch(
+        self,
+        threads: List[Union["Thread", str]],
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout=(5, 30),
+        raw: bool = False,
+        **kwargs,
+    ) -> Tuple[str, List[str]] | Dict:
+        """This is the blocking function to submit a batch of threads. It will return the batch_id and custom_ids
+        for ordering the responses"""
+        raise NotImplementedError("This model has no operation for this.")
+
+    def get_batch(
+        self,
+        batch_id: str,
+        custom_ids: Optional[List[str]] = None,
+        token: Optional[str] = None,
+        raw: bool = False,
+    ) -> Tuple[Union[List[Any], Dict], Union[str, None]]:
+        """This is the blocking function to get the batch results"""
+        raise NotImplementedError("This model has no operation for this.")
+
 
 class Usage:
     def __init__(
@@ -560,7 +589,7 @@ class Thread:
         self.model = model
         self.id = id or "thread_" + str(tu.get_snowflake())
         self.title = title
-        self.tools = tools
+        self.tools = tools or []
         self.schema = schema
 
         #
