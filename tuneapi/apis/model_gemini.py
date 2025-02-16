@@ -257,13 +257,14 @@ class Gemini(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 4096,
+        max_tokens: int = None,
         temperature: float = 1,
         token: Optional[str] = None,
-        debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        raw: bool = False,
         timeout=(5, 60),
+        usage: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        raw: bool = False,
         **kwargs,
     ):
         url, headers, data = self._process_input(
@@ -297,11 +298,13 @@ class Gemini(tt.ModelInterface):
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
-        max_tokens: int = 4096,
+        max_tokens: int = None,
         temperature: float = 1,
         token: Optional[str] = None,
-        timeout=None,
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ) -> Any:
         output = ""
@@ -338,10 +341,10 @@ class Gemini(tt.ModelInterface):
         max_tokens: int = 4096,
         temperature: float = 1,
         token: Optional[str] = None,
-        timeout=(5, 60),
         raw: bool = False,
         debug: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        timeout=(5, 60),
         **kwargs,
     ):
         url, headers, data = self._process_input(
@@ -383,8 +386,8 @@ class Gemini(tt.ModelInterface):
         max_tokens: int = None,
         temperature: float = 1,
         token: Optional[str] = None,
-        timeout=None,
         extra_headers: Optional[Dict[str, str]] = None,
+        timeout=(5, 60),
         **kwargs,
     ) -> Any:
         output = ""

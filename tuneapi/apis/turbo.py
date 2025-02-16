@@ -55,10 +55,11 @@ def distributed_chat(
         TypeError: If model is not an instance of ModelInterface
 
     Example:
-        >>> model = ChatModel(api_token="...")
+        >>> from tuneapi import ta, tt
+        >>> model = ta.Gemini()
         >>> prompts = [
-        ...     Thread([Message("What is 2+2?")]),
-        ...     Thread([Message("What is Python?")])
+        ...     tt.Thread([tt.human("What is 2+2?")]),
+        ...     tt.Thread([tt.human("What is Python?")])
         ... ]
         >>> responses = distributed_chat(model, prompts, max_threads=5)
         >>> for prompt, response in zip(prompts, responses):

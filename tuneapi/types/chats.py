@@ -322,28 +322,33 @@ class ModelInterface:
 
     def stream_chat(
         self,
-        chats: "Thread",
+        chats: Union["Thread", str],
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = None,
         temperature: float = 1,
         token: Optional[str] = None,
-        timeout=(5, 60),
-        raw: bool = False,
-        debug: bool = False,
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        raw: bool = False,
+        timeout=(5, 60),
+        **kwargs,
     ):
         """This is the blocking function to stream chat with the model where each token is iteratively generated"""
         raise NotImplementedError("This model has no operation for this.")
 
     def chat(
         self,
-        chats: "Thread",
+        chats: Union["Thread", str],
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = None,
         temperature: float = 1,
+        parallel_tool_calls: bool = False,
         token: Optional[str] = None,
-        timeout=(5, 30),
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ) -> str | Dict[str, Any]:
         """This is the blocking function to block chat with the model"""
@@ -351,13 +356,16 @@ class ModelInterface:
 
     async def stream_chat_async(
         self,
-        chats: "Thread",
+        chats: Union["Thread", str],
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = None,
         temperature: float = 1,
         token: Optional[str] = None,
-        timeout=(5, 30),
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        raw: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ) -> str | Dict[str, Any]:
         """This is the async function to stream chat with the model where each token is iteratively generated"""
@@ -365,13 +373,16 @@ class ModelInterface:
 
     async def chat_async(
         self,
-        chats: "Thread",
+        chats: Union["Thread", str],
         model: Optional[str] = None,
-        max_tokens: int = 1024,
+        max_tokens: int = None,
         temperature: float = 1,
+        parallel_tool_calls: bool = False,
         token: Optional[str] = None,
-        timeout=(5, 30),
+        usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ) -> str | Dict[str, Any]:
         """This is the async function to block chat with the model"""
@@ -384,6 +395,7 @@ class ModelInterface:
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        debug=False,
         **kwargs,
     ):
         """This is the blocking function to chat with the model in a distributed manner"""
@@ -396,6 +408,7 @@ class ModelInterface:
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
+        debug=False,
         **kwargs,
     ):
         """This is the async function to chat with the model in a distributed manner"""

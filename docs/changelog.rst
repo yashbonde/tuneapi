@@ -7,6 +7,11 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.6
+-----
+
+- Standardise all the implementations of the ``tuneapi.types.chats.ModelInterface``
+
 8.0.5
 -----
 

@@ -249,13 +249,13 @@ class OpenAIProtocol(tt.ModelInterface):
         model: Optional[str] = None,
         max_tokens: int = None,
         temperature: float = 1,
-        parallel_tool_calls: bool = False,
         token: Optional[str] = None,
         timeout=(5, 60),
         usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
         raw: bool = False,
+        parallel_tool_calls: bool = False,
         **kwargs,
     ):
         headers, data = self._process_input(
@@ -295,10 +295,12 @@ class OpenAIProtocol(tt.ModelInterface):
         model: Optional[str] = None,
         max_tokens: int = None,
         temperature: float = 1,
-        parallel_tool_calls: bool = False,
         token: Optional[str] = None,
         usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
+        timeout=(5, 60),
+        parallel_tool_calls: bool = False,
         **kwargs,
     ) -> Any:
         output = ""
@@ -313,6 +315,8 @@ class OpenAIProtocol(tt.ModelInterface):
                 token=token,
                 extra_headers=extra_headers,
                 raw=False,
+                debug=debug,
+                timeout=timeout,
                 **kwargs,
             ):
                 if isinstance(x, dict):
@@ -340,11 +344,11 @@ class OpenAIProtocol(tt.ModelInterface):
         temperature: float = 1,
         parallel_tool_calls: bool = False,
         token: Optional[str] = None,
-        timeout=(5, 60),
         usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
         debug: bool = False,
         raw: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ):
         headers, data = self._process_input(
@@ -391,6 +395,7 @@ class OpenAIProtocol(tt.ModelInterface):
         token: Optional[str] = None,
         usage: bool = False,
         extra_headers: Optional[Dict[str, str]] = None,
+        timeout=(5, 60),
         **kwargs,
     ) -> Any:
         output = ""
@@ -404,6 +409,7 @@ class OpenAIProtocol(tt.ModelInterface):
             token=token,
             extra_headers=extra_headers,
             raw=False,
+            timeout=timeout,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -1208,6 +1214,7 @@ class Mistral(OpenAIProtocol):
         base_url: str = "https://api.mistral.ai/v1/chat/completions",
         extra_headers: Optional[Dict[str, str]] = None,
         api_token: Optional[str] = None,
+        **kwargs,
     ):
         super().__init__(
             id=id,
@@ -1247,6 +1254,7 @@ class Groq(OpenAIProtocol):
         base_url: str = "https://api.groq.com/openai/v1/chat/completions",
         extra_headers: Optional[Dict[str, str]] = None,
         api_token: Optional[str] = None,
+        **kwargs,
     ):
         super().__init__(
             id=id,
@@ -1287,6 +1295,7 @@ class TuneModel(OpenAIProtocol):
         org_id: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         api_token: Optional[str] = None,
+        **kwargs,
     ):
         if extra_headers is None:
             extra_headers = {}
@@ -1348,6 +1357,7 @@ class Ollama(OpenAIProtocol):
         self,
         id: str,
         base_url: str = "http://localhost:11434/v1/chat/completions",
+        **kwargs,
     ):
         super().__init__(
             id=id,
