@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass
 
 from tuneapi.types import Thread, ModelInterface, Usage
-from tuneapi.utils import logger
+from tuneapi.utils import logger, SimplerTimes
 
 
 def distributed_chat(
@@ -20,6 +20,7 @@ def distributed_chat(
     pbar=True,
     debug=False,
     usage: bool = False,
+    time_metrics: bool = False,
     **kwargs,
 ) -> List | Tuple[List, Usage]:
     """
@@ -44,6 +45,14 @@ def distributed_chat(
         retry (int, default=3): Number of retry attempts for failed requests. Set to 0 to disable retries.
 
         pbar (bool, default=True): Whether to display a progress bar.
+
+        debug (bool, default=False): Whether to log debug information.
+
+        usage (bool, default=False): Whether to return usage statistics. If True, the function will return a tuple of
+            (responses, usage) where usage is an instance of Usage.
+
+        time_metrics (bool, default=False): Whether to return time metrics. If True, the function will return a tuple of
+            (responses, time_metrics) where time_metrics is a list of time taken for each prompt.
 
     Returns:
         List[Any]: A list of responses or errors, maintaining the same order as input prompts.
@@ -83,6 +92,7 @@ def distributed_chat(
                 if task is None:  # Poison pill
                     break
 
+                st = SimplerTimes.get_now_fp64()
                 try:
                     out = task.model.chat(chats=task.prompt, **task.kwargs)
                     if usage:
@@ -90,9 +100,23 @@ def distributed_chat(
                     if post_logic:
                         out = post_logic(out)
                     if not usage:
-                        result_channel.put(_Result(task.index, out, True))
+                        result_channel.put(
+                            _Result(
+                                index=task.index,
+                                data=out,
+                                success=True,
+                                time_elapsed=SimplerTimes.get_now_fp64() - st,
+                            )
+                        )
                     else:
-                        result_channel.put(_Result(task.index, (out, _usage), True))
+                        result_channel.put(
+                            _Result(
+                                index=task.index,
+                                data=(out, _usage),
+                                success=True,
+                                time_elapsed=SimplerTimes.get_now_fp64() - st,
+                            )
+                        )
                 except Exception as e:
                     if task.retry_count < retry:
                         # Create new model instance for retry
@@ -114,7 +138,15 @@ def distributed_chat(
                         )
                     else:
                         # If we've exhausted retries, store the error
-                        result_channel.put(_Result(task.index, e, False, e))
+                        result_channel.put(
+                            _Result(
+                                index=task.index,
+                                data=None,
+                                success=False,
+                                error=e,
+                                time_elapsed=SimplerTimes.get_now_fp64() - st,
+                            )
+                        )
                 finally:
                     task_channel.task_done()
             except queue.Empty:
@@ -131,7 +163,7 @@ def distributed_chat(
         logger.info(f"Processing {len(prompts)} prompts with {max_threads} workers")
 
     # Initialize progress bar
-    _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
+    _pbar = trange(len(prompts), unit=" APIs") if pbar else None
 
     # Queue initial tasks
     kwargs.update({"usage": usage})
@@ -155,9 +187,10 @@ def distributed_chat(
     # Process results
     completed = 0
     all_usage: List[Usage] = []
+    time_taken: List[float] = []
     while completed < len(prompts):
         try:
-            result = result_channel.get(timeout=1)
+            result: _Result = result_channel.get(timeout=1)
             if result.success:
                 if usage:
                     results[result.index], _usage = result.data
@@ -170,6 +203,7 @@ def distributed_chat(
                 _pbar.update(1)
             completed += 1
             result_channel.task_done()
+            time_taken.append(result.time_elapsed)
         except queue.Empty:
             continue
 
@@ -182,6 +216,7 @@ def distributed_chat(
     if _pbar:
         _pbar.close()
 
+    return_items = [results]
     if usage:
         _usage = Usage(
             input_tokens=sum([u.input_tokens for u in all_usage]),
@@ -189,8 +224,10 @@ def distributed_chat(
             cached_tokens=sum([u.cached_tokens for u in all_usage]),
             all_usage=all_usage,
         )
-        return results, _usage
-    return results
+        return_items.append(_usage)
+    if time_metrics:
+        return_items.append(time_taken)
+    return tuple(return_items)
 
 
 async def distributed_chat_async(
@@ -202,13 +239,15 @@ async def distributed_chat_async(
     pbar=True,
     debug=False,
     usage: bool = False,
+    time_metrics: bool = False,
     **kwargs,
 ):
     _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
     results = [None for _ in range(len(prompts))]
     kwargs.update({"usage": usage})
 
-    async def process_prompt(index, prompt, retry_count=0):
+    async def process_prompt(index, prompt, retry_count=0) -> _Result:
+        st = SimplerTimes.get_now_fp64()
         try:
             out = await model.chat_async(chats=prompt, **kwargs)
             if usage:
@@ -217,14 +256,30 @@ async def distributed_chat_async(
                 out = post_logic(out)
             _pbar.update(1)
             if not usage:
-                return (index, out, True)
+                return _Result(
+                    index=index,
+                    data=out,
+                    success=True,
+                    time_elapsed=SimplerTimes.get_now_fp64() - st,
+                )
             else:
-                return (index, (out, _usage), True)
+                return _Result(
+                    index=index,
+                    data=(out, _usage),
+                    success=True,
+                    time_elapsed=SimplerTimes.get_now_fp64() - st,
+                )
         except Exception as e:
             if retry_count < retry:
                 return await process_prompt(index, prompt, retry_count + 1)
             else:
-                return (index, None, False, e)
+                return _Result(
+                    index=index,
+                    data=None,
+                    success=False,
+                    error=e,
+                    time_elapsed=SimplerTimes.get_now_fp64() - st,
+                )
 
     # Run all tasks concurrently using asyncio.gather
     tasks = []
@@ -234,25 +289,28 @@ async def distributed_chat_async(
     if debug:
         logger.info(f"Processing {len(prompts)} prompts with {max_threads} workers")
 
-    results_from_gather = await asyncio.gather(*tasks)
+    results_from_gather: List[_Result] = await asyncio.gather(*tasks)
 
     # Process results
     all_usage: List[Usage] = []
+    time_taken: List[float] = []
     for r in results_from_gather:
-        index, data, success, *error = r
-
-        if success:
+        if r.success:
             if usage:
-                results[index], _usage = data
+                results[r.index], _usage = r.data
                 all_usage.append(_usage)
             else:
-                results[index] = data
+                results[r.index] = r.data
         else:
-            results[index] = error[0] if error else None
+            results[r.index] = r.error[0] if r.error else None
+
+        # whether success or failure, record time taken
+        time_taken.append(r.time_elapsed)
 
     if _pbar:
         _pbar.close()
 
+    return_items = [results]
     if usage:
         _usage = Usage(
             input_tokens=sum([u.input_tokens for u in all_usage]),
@@ -260,8 +318,10 @@ async def distributed_chat_async(
             cached_tokens=sum([u.cached_tokens for u in all_usage]),
             all_usage=all_usage,
         )
-        return results, _usage
-    return results
+        return_items.append(_usage)
+    if time_metrics:
+        return_items.append(time_taken)
+    return tuple(return_items)
 
 
 # helpers
@@ -286,3 +346,4 @@ class _Result:
     data: any
     success: bool
     error: Optional[Exception] = None
+    time_elapsed: Optional[float] = None

@@ -6,7 +6,7 @@ Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs
 
 import os
 import httpx
-import requests
+import aiofiles
 from PIL import Image
 from io import BytesIO
 from copy import deepcopy
@@ -31,6 +31,8 @@ class OpenAIProtocol(tt.ModelInterface):
         batch_url: Optional[str],
         files_url: Optional[str],
     ):
+        super().__init__()
+
         self.model_id = id
         self.base_url = base_url
         self.api_token = api_token
@@ -41,9 +43,14 @@ class OpenAIProtocol(tt.ModelInterface):
         self.audio_gen_url = audio_gen_url
         self.batch_url = batch_url
         self.files_url = files_url
+        self.client = None
+
+    # setters
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
+
+    # common methods
 
     def _process_header(
         self,
@@ -54,6 +61,8 @@ class OpenAIProtocol(tt.ModelInterface):
             "Authorization": "Bearer " + (token or self.api_token),
             "Content-Type": content_type,
         }
+
+    # Chat methods
 
     def _process_thread(self, thread: tt.Thread) -> List[Dict[str, Any]]:
         prev_tool_id = tu.get_random_string(5)
@@ -241,8 +250,6 @@ class OpenAIProtocol(tt.ModelInterface):
             fn_call["arguments"] = tu.from_json(fn_call["arguments"])
             yield fn_call
 
-    # Chat methods
-
     def stream_chat(
         self,
         chats: tt.Thread | str,
@@ -270,11 +277,13 @@ class OpenAIProtocol(tt.ModelInterface):
             debug=debug,
             **kwargs,
         )
-        response = requests.post(
+        if self.client is None:
+            self.set_client()
+
+        response = self.client.post(
             self.base_url,
             headers=headers,
             json=data,
-            stream=True,
             timeout=timeout,
         )
         try:
@@ -325,8 +334,8 @@ class OpenAIProtocol(tt.ModelInterface):
                     usage_obj = x
                 else:
                     output += x
-        except requests.HTTPError as e:
-            print(e.response.text)
+        except httpx.HTTPError as e:
+            tu.logger.error(f"API Error: {e.response.text}")
             raise e
 
         if isinstance(chats, tt.Thread) and chats.schema:
@@ -335,6 +344,29 @@ class OpenAIProtocol(tt.ModelInterface):
         if usage:
             return output, usage_obj
         return output
+
+    def distributed_chat(
+        self,
+        prompts: List[tt.Thread],
+        post_logic: Optional[callable] = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar: bool = True,
+        debug: bool = False,
+        time_metrics: bool = False,
+        **kwargs,
+    ):
+        return distributed_chat(
+            self,
+            prompts=prompts,
+            post_logic=post_logic,
+            max_threads=max_threads,
+            retry=retry,
+            pbar=pbar,
+            debug=debug,
+            time_metrics=time_metrics,
+            **kwargs,
+        )
 
     async def stream_chat_async(
         self,
@@ -364,26 +396,28 @@ class OpenAIProtocol(tt.ModelInterface):
             **kwargs,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self.base_url,
-                headers=headers,
-                json=data,
-                timeout=timeout,
-            )
-            try:
-                response.raise_for_status()
-            except Exception as e:
-                yield response.text
-                raise e
+        if self.async_client is None:
+            self.set_async_client()
 
-            async for chunk in response.aiter_bytes():
-                for x in self._process_output(
-                    raw=raw,
-                    lines_fn=chunk.decode("utf-8").splitlines,
-                    yield_usage=usage,
-                ):
-                    yield x
+        response = await self.async_client.post(
+            self.base_url,
+            headers=headers,
+            json=data,
+            timeout=timeout,
+        )
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            yield response.text
+            raise e
+
+        async for chunk in response.aiter_bytes():
+            for x in self._process_output(
+                raw=raw,
+                lines_fn=chunk.decode("utf-8").splitlines,
+                yield_usage=usage,
+            ):
+                yield x
 
     async def chat_async(
         self,
@@ -400,24 +434,29 @@ class OpenAIProtocol(tt.ModelInterface):
     ) -> Any:
         output = ""
         usage_obj = None
-        async for x in self.stream_chat_async(
-            chats=chats,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            parallel_tool_calls=parallel_tool_calls,
-            token=token,
-            extra_headers=extra_headers,
-            raw=False,
-            timeout=timeout,
-            **kwargs,
-        ):
-            if isinstance(x, dict):
-                output = x
-            elif isinstance(x, tt.Usage):
-                usage_obj = x
-            else:
-                output += x
+        try:
+            async for x in self.stream_chat_async(
+                chats=chats,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                parallel_tool_calls=parallel_tool_calls,
+                token=token,
+                extra_headers=extra_headers,
+                raw=False,
+                timeout=timeout,
+                **kwargs,
+            ):
+                if isinstance(x, dict):
+                    output = x
+                elif isinstance(x, tt.Usage):
+                    usage_obj = x
+                else:
+                    output += x
+        except httpx.HTTPError as e:
+            tu.logger.error(f"API Error: {e.response.text}")
+            raise e
+
         if isinstance(chats, tt.Thread) and chats.schema:
             output = chats.schema(**tu.from_json(output))
 
@@ -425,35 +464,15 @@ class OpenAIProtocol(tt.ModelInterface):
             return output, usage_obj
         return output
 
-    def distributed_chat(
-        self,
-        prompts: List[tt.Thread],
-        post_logic: Optional[callable] = None,
-        max_threads: int = 10,
-        retry: int = 3,
-        pbar=True,
-        debug=False,
-        **kwargs,
-    ):
-        return distributed_chat(
-            self,
-            prompts=prompts,
-            post_logic=post_logic,
-            max_threads=max_threads,
-            retry=retry,
-            pbar=pbar,
-            debug=debug,
-            **kwargs,
-        )
-
     async def distributed_chat_async(
         self,
         prompts: List[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
-        pbar=True,
-        debug=False,
+        pbar: bool = True,
+        debug: bool = False,
+        time_metrics: bool = False,
         **kwargs,
     ):
         return await distributed_chat_async(
@@ -464,6 +483,7 @@ class OpenAIProtocol(tt.ModelInterface):
             retry=retry,
             pbar=pbar,
             debug=debug,
+            time_metrics=time_metrics,
             **kwargs,
         )
 
@@ -523,13 +543,16 @@ class OpenAIProtocol(tt.ModelInterface):
             extra_headers=extra_headers,
         )
 
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.post(
+            url=self.emebdding_url,
+            json=data,
+            headers=headers,
+            timeout=timeout,
+        )
         try:
-            r = requests.post(
-                url=self.emebdding_url,
-                json=data,
-                headers=headers,
-                timeout=timeout,
-            )
             r.raise_for_status()
         except Exception as e:
             print(r.text)
@@ -539,7 +562,7 @@ class OpenAIProtocol(tt.ModelInterface):
             return r.json()
 
         return tt.EmbeddingGen(
-            embeddings=[
+            embedding=[
                 x["embedding"]
                 for x in sorted(
                     r.json()["data"],
@@ -570,38 +593,40 @@ class OpenAIProtocol(tt.ModelInterface):
             extra_headers=extra_headers,
         )
 
-        async with httpx.AsyncClient(http2=False) as client:
-            try:
-                r = await client.post(
-                    url=self.emebdding_url,
-                    json=data,
-                    headers=headers,
-                    timeout=timeout,
+        if self.async_client is None:
+            self.set_async_client()
+
+        r = await self.async_client.post(
+            url=self.emebdding_url,
+            json=data,
+            headers=headers,
+            timeout=timeout,
+        )
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            print(e.response.text)
+            raise e
+        except Exception as e:
+            print(f"An unexpected error occured: {e}")
+            raise e
+
+        resp = ""
+        async for chunk in r.aiter_bytes():
+            resp += chunk.decode("utf-8")
+
+        if raw:
+            return tu.from_json(resp)
+
+        return tt.EmbeddingGen(
+            embedding=[
+                x["embedding"]
+                for x in sorted(
+                    r.json()["data"],
+                    key=lambda x: x["index"],
                 )
-                r.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                print(e.response.text)
-                raise e
-            except Exception as e:
-                print(f"An unexpected error occured: {e}")
-                raise e
-
-            resp = ""
-            async for chunk in r.aiter_bytes():
-                resp += chunk.decode("utf-8")
-
-            if raw:
-                return tu.from_json(resp)
-
-            return tt.EmbeddingGen(
-                embeddings=[
-                    x["embedding"]
-                    for x in sorted(
-                        r.json()["data"],
-                        key=lambda x: x["index"],
-                    )
-                ]
-            )
+            ]
+        )
 
     # Image methods
 
@@ -661,23 +686,27 @@ class OpenAIProtocol(tt.ModelInterface):
             extra_headers=extra_headers,
             **kwargs,
         )
+
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.post(
+            url=self.image_gen_url,
+            json=data,
+            headers=headers,
+            timeout=timeout,
+        )
         try:
-            r = requests.post(
-                url=self.image_gen_url,
-                json=data,
-                headers=headers,
-                timeout=timeout,
-            )
             r.raise_for_status()
         except Exception as e:
             tu.logger.error(f"Cannot generate image: {r.text}")
             raise e
         out = r.json()
 
+        img_r = self.client.get(out["data"][0]["url"])
         try:
-            img_r = requests.get(out["data"][0]["url"])
             img_r.raise_for_status()
-        except requests.HTTPError as e:
+        except httpx.HTTPError as e:
             print(e.response.text)
             raise e
         except Exception as e:
@@ -698,8 +727,7 @@ class OpenAIProtocol(tt.ModelInterface):
         extra_headers: Optional[Dict[str, str]] = None,
         timeout: Tuple[int, int] = (5, 60),
         **kwargs,
-    ) -> Image:
-
+    ) -> tt.ImageGen:
         if self.image_gen_url is None:
             raise ValueError(
                 "Image Generation URL is not set. Does this model support image generation?"
@@ -715,28 +743,34 @@ class OpenAIProtocol(tt.ModelInterface):
             **kwargs,
         )
 
-        async with httpx.AsyncClient() as client:
-            try:
-                r = await client.post(
-                    url=self.image_gen_url,
-                    json=data,
-                    headers=headers,
-                    timeout=timeout,
-                )
-                r.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                tu.logger.error(f"Cannot generate image: {e.response.text}")
-                raise e
-            out = r.json()
+        if self.async_client is None:
+            self.set_async_client()
 
-            try:
-                img_r = await client.get(out["data"][0]["url"])
-                img_r.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                tu.logger.error(f"Cannot fetch image: {e.response.text}")
-                raise e
-            cont = BytesIO(img_r.content)
-            return Image.open(cont)
+        # generate image
+        r = await self.async_client.post(
+            url=self.image_gen_url,
+            json=data,
+            headers=headers,
+            timeout=timeout,
+        )
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            tu.logger.error(f"Cannot generate image: {e.response.text}")
+            raise e
+        out = r.json()
+
+        # now fetch the image
+        img_r = await self.async_client.get(out["data"][0]["url"])
+        try:
+            img_r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            tu.logger.error(f"Cannot fetch image: {e.response.text}")
+            raise e
+        cont = BytesIO(img_r.content)
+        return tt.ImageGen(
+            image=Image.open(cont),
+        )
 
     # Audio methods
 
@@ -765,6 +799,9 @@ class OpenAIProtocol(tt.ModelInterface):
         if tu.file_size(audio) / (1024 * 1024) > 25:
             raise ValueError("Audio file size should be less than 25 MB")
 
+        if self.client is None:
+            self.set_client()
+
         with open(audio, "rb") as f:
             files = {"file": (os.path.basename(audio), f)}
             data = {
@@ -775,12 +812,66 @@ class OpenAIProtocol(tt.ModelInterface):
             }
             if kwargs:
                 data.update(kwargs)
-            r = requests.post(
+            r = self.client.post(
                 url=self.audio_transcribe_url,
                 headers=headers,
                 files=files,
                 data=data,
                 timeout=timeout,
+            )
+
+        try:
+            r.raise_for_status()
+        except Exception as e:
+            tu.logger.error(f"Could not transcribe audio: {r.text}")
+            raise e
+
+        return tt.get_transcript(text=r.content.decode("utf-8"))
+
+    async def speech_to_text_async(
+        self,
+        prompt: str,
+        audio: str,
+        model="whisper-1",
+        timestamp_granularities=["segment"],
+        token: Optional[str] = None,
+        timeout: Tuple[int, int] = (5, 300),
+        **kwargs,
+    ) -> tt.Transcript:
+        if self.audio_transcribe_url is None:
+            raise ValueError(
+                "Audio Transcription URL is not set. Does this model support audio transcription?"
+            )
+
+        headers = self._process_header(token=token)
+        headers.pop("Content-Type")
+
+        if not (isinstance(audio, str) and os.path.exists(audio)):
+            raise ValueError("Invalid audio file path")
+
+        # max file size can be 25 MB
+        if tu.file_size(audio) / (1024 * 1024) > 25:
+            raise ValueError("Audio file size should be less than 25 MB")
+
+        if self.async_client is None:
+            self.set_async_client()
+
+        async with aiofiles.open(audio, mode="rb") as f:
+            files = {"file": (os.path.basename(audio), await f.read())}
+            data = {
+                "model": model,
+                "prompt": prompt,
+                "response_format": "vtt",
+                "timestamp_granularities": timestamp_granularities,
+            }
+            if kwargs:
+                data.update(kwargs)
+
+            r = await self.async_client.post(
+                url=self.audio_transcribe_url,
+                headers=headers,
+                files=files,
+                data=data,
             )
 
         try:
@@ -837,15 +928,19 @@ class OpenAIProtocol(tt.ModelInterface):
             extra_headers=extra_headers,
             **kwargs,
         )
+
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.post(
+            url=self.audio_gen_url,
+            json=data,
+            headers=headers,
+            timeout=timeout,
+        )
         try:
-            r = requests.post(
-                url=self.audio_gen_url,
-                json=data,
-                headers=headers,
-                timeout=timeout,
-            )
             r.raise_for_status()
-        except requests.HTTPError as e:
+        except httpx.HTTPError as e:
             tu.logger.error(f"Cannot to text to speech: {e.response.text}")
             raise e
         except Exception as e:
@@ -879,23 +974,25 @@ class OpenAIProtocol(tt.ModelInterface):
             **kwargs,
         )
 
-        async with httpx.AsyncClient() as client:
-            try:
-                r = await client.post(
-                    url=self.audio_gen_url,
-                    json=data,
-                    headers=headers,
-                    timeout=timeout,
-                )
-                r.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                tu.logger.error(f"Cannot to text to speech: {e.response.text}")
-                raise e
-            except Exception as e:
-                tu.logger.error(f"An unexpected error occured: {e}")
-                raise e
+        if self.async_client is None:
+            self.set_async_client()
 
-            return r.content
+        r = await self.async_client.post(
+            url=self.audio_gen_url,
+            json=data,
+            headers=headers,
+            timeout=timeout,
+        )
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            tu.logger.error(f"Cannot to text to speech: {e.response.text}")
+            raise e
+        except Exception as e:
+            tu.logger.error(f"An unexpected error occured: {e}")
+            raise e
+
+        return r.content
 
     # Submit batches
 
@@ -956,10 +1053,13 @@ class OpenAIProtocol(tt.ModelInterface):
             tu.logger.info("Creating temporary file at " + fp)
         tu.to_json(bodies, fp)
 
+        if self.client is None:
+            self.set_client()
+
         with open(fp, "rb") as f:
             files = {"file": (os.path.basename(fp), f)}
             data = {"purpose": "batch"}
-            response = requests.post(
+            response = self.client.post(
                 url=self.files_url,
                 headers=headers,
                 files=files,
@@ -991,7 +1091,10 @@ class OpenAIProtocol(tt.ModelInterface):
             tu.logger.info("Saving batch at path batch_oai.json")
             tu.to_json(body, fp="batch_oai.json")
 
-        r = requests.post(
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.post(
             url=self.batch_url,
             headers=headers,
             json=body,
@@ -1020,8 +1123,11 @@ class OpenAIProtocol(tt.ModelInterface):
         if self.batch_url is None:
             raise ValueError("Batch URL is not set. Does this model support batches?")
 
+        if self.client is None:
+            self.set_client()
+
         headers = self._process_header(token)
-        r = requests.get(self.batch_url + "/" + batch_id, headers=headers)
+        r = self.client.get(self.batch_url + "/" + batch_id, headers=headers)
         try:
             r.raise_for_status()
         except Exception as e:
@@ -1044,7 +1150,7 @@ class OpenAIProtocol(tt.ModelInterface):
 
         # get the results
         results_file = resp["output_file_id"]
-        r = requests.get(
+        r = self.client.get(
             self.files_url + "/" + results_file + "/content",
             headers=headers,
         )
@@ -1066,51 +1172,6 @@ class OpenAIProtocol(tt.ModelInterface):
 
         if raw:
             return output, None
-
-        # {
-        #     "id": "batch_req_679b77b2dabc819093e6cb800a390656",
-        #     "custom_id": "tuneapi_phrD3LUIrq",
-        #     "response": {
-        #         "status_code": 200,
-        #         "request_id": "fd4e82075565ba919be2d78047d991da",
-        #         "body": {
-        #             "id": "chatcmpl-AvOPKrquzCElPn2Fi5HvBkxWWqR9r",
-        #             "object": "chat.completion",
-        #             "created": 1738241882,
-        #             "model": "gpt-4o-2024-08-06",
-        #             "choices": [
-        #                 {
-        #                     "index": 0,
-        #                     "message": {
-        #                         "role": "assistant",
-        #                         "content": "2 + 2 equals 4.",
-        #                         "refusal": None,
-        #                     },
-        #                     "logprobs": None,
-        #                     "finish_reason": "stop",
-        #                 }
-        #             ],
-        #             "usage": {
-        #                 "prompt_tokens": 15,
-        #                 "completion_tokens": 9,
-        #                 "total_tokens": 24,
-        #                 "prompt_tokens_details": {
-        #                     "cached_tokens": 0,
-        #                     "audio_tokens": 0,
-        #                 },
-        #                 "completion_tokens_details": {
-        #                     "reasoning_tokens": 0,
-        #                     "audio_tokens": 0,
-        #                     "accepted_prediction_tokens": 0,
-        #                     "rejected_prediction_tokens": 0,
-        #                 },
-        #             },
-        #             "service_tier": "default",
-        #             "system_fingerprint": "fp_4691090a87",
-        #         },
-        #     },
-        #     "error": None,
-        # }
 
         _usage = tt.Usage(0, 0)
         for o in output:

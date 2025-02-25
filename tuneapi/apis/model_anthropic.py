@@ -4,8 +4,6 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 
 # Copyright © 2024-2025 Frello Technology Private Limited
 
-import httpx
-import requests
 from copy import deepcopy
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -22,11 +20,14 @@ class Anthropic(tt.ModelInterface):
         api_token: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
     ):
+        super().__init__()
+
         self.model_id = id
         self.base_url = base_url
         self.batch_url = base_url + "/batches"
         self.api_token = api_token or tu.ENV.ANTHROPIC_TOKEN("")
         self.extra_headers = extra_headers
+        self.client = None
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -303,13 +304,17 @@ class Anthropic(tt.ModelInterface):
             extra_headers=extra_headers,
             **kwargs,
         )
+
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.post(
+            self.base_url,
+            headers=headers,
+            json=data,
+            timeout=timeout,
+        )
         try:
-            r = requests.post(
-                self.base_url,
-                headers=headers,
-                json=data,
-                timeout=timeout,
-            )
             r.raise_for_status()
         except Exception as e:
             yield r.text
@@ -385,26 +390,28 @@ class Anthropic(tt.ModelInterface):
             **kwargs,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self.base_url,
-                headers=headers,
-                json=data,
-                timeout=timeout,
-            )
-            try:
-                response.raise_for_status()
-            except Exception as e:
-                yield str(e)
-                return
+        if self.async_client is None:
+            self.set_async_client()
 
-            async for chunk in response.aiter_bytes():
-                for x in self._process_output(
-                    raw=raw,
-                    lines_fn=chunk.decode("utf-8").splitlines,
-                    yield_usage=usage,
-                ):
-                    yield x
+        response = await self.async_client.post(
+            self.base_url,
+            headers=headers,
+            json=data,
+            timeout=timeout,
+        )
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            yield str(e)
+            return
+
+        async for chunk in response.aiter_bytes():
+            for x in self._process_output(
+                raw=raw,
+                lines_fn=chunk.decode("utf-8").splitlines,
+                yield_usage=usage,
+            ):
+                yield x
 
     def distributed_chat(
         self,
@@ -412,8 +419,9 @@ class Anthropic(tt.ModelInterface):
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
-        pbar=True,
-        debug=False,
+        pbar: bool = True,
+        debug: bool = False,
+        time_metrics: bool = False,
         **kwargs,
     ):
         return distributed_chat(
@@ -424,6 +432,7 @@ class Anthropic(tt.ModelInterface):
             retry=retry,
             pbar=pbar,
             debug=debug,
+            time_metrics=time_metrics,
             **kwargs,
         )
 
@@ -433,8 +442,9 @@ class Anthropic(tt.ModelInterface):
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
-        pbar=True,
-        debug=False,
+        pbar: bool = True,
+        debug: bool = False,
+        time_metrics: bool = False,
         **kwargs,
     ):
         return await distributed_chat_async(
@@ -445,6 +455,7 @@ class Anthropic(tt.ModelInterface):
             retry=retry,
             pbar=pbar,
             debug=debug,
+            time_metrics=time_metrics,
             **kwargs,
         )
 
@@ -483,7 +494,10 @@ class Anthropic(tt.ModelInterface):
             print("Saving at path " + fp)
             tu.to_json(body, fp=fp)
 
-        r = requests.post(
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.post(
             url=self.batch_url,
             headers=headers,
             timeout=timeout,
@@ -510,7 +524,11 @@ class Anthropic(tt.ModelInterface):
         verbose: bool = False,
     ) -> Tuple[List[Any] | Dict, str | None]:
         headers = self._process_header(token)
-        r = requests.get(self.batch_url + "/" + batch_id, headers=headers)
+
+        if self.client is None:
+            self.set_client()
+
+        r = self.client.get(self.batch_url + "/" + batch_id, headers=headers)
         try:
             r.raise_for_status()
         except Exception as e:
@@ -526,7 +544,7 @@ class Anthropic(tt.ModelInterface):
         results_url = resp["results_url"]
 
         # fetch the results, response is a JSONL, fucntion return shoudl be a List of JSONs
-        r = requests.get(results_url, headers=headers)
+        r = self.client.get(results_url, headers=headers)
         try:
             r.raise_for_status()
         except Exception as e:

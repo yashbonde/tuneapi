@@ -7,6 +7,17 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.7
+-----
+
+- Add replace ``requests.Session`` with ``httpx.Client`` in all the ``tuneapi.apis`` models
+- ``tuneapi.types.chats.ModelInterface`` is a class now instead of a protocol so must be initialised like
+  ``super().__init__()``
+- Make client common for a single instance of ``tuneapi.types.chats.ModelInterface`` instead of multuple clients. As is
+  suggested in the httpx documentation, never create multiple clients in the ``hotloop``. This has increased the speed
+  of ``distributed_chat`` by 8.6% in our benchmarks. It also means when running 100s of prompts in parallel in a server
+  this will reduce the chance of API failure.
+
 8.0.6
 -----
 

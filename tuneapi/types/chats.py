@@ -15,7 +15,9 @@ import os
 import re
 import json
 import copy
+import httpx
 import random
+import requests
 import nutree as nt
 from PIL.Image import Image
 from functools import partial
@@ -314,9 +316,33 @@ class ModelInterface:
     base_url: str
     """This is the default URL that has to be pinged. This may not be the REST endpoint URL but anything"""
 
+    client: httpx.Client
+    """This is the client that is used to make the requests"""
+
+    async_client: httpx.AsyncClient
+    """This is the async client that is used to make the requests"""
+
+    def __init__(self):
+        self.model_id = ""
+        self.api_token = ""
+        self.extra_headers = {}
+        self.base_url = ""
+        self.client = None
+        self.async_client = None
+
     def set_api_token(self, token: str) -> None:
         """This are used to set the API token for the model"""
-        raise NotImplementedError("This model has no operation for this.")
+        self.api_token = token
+
+    def set_async_client(self, client: httpx.AsyncClient = None):
+        if client is None:
+            client = httpx.AsyncClient()
+        self.async_client = client
+
+    def set_client(self, client: httpx.Client = None):
+        if client is None:
+            client = httpx.Client()
+        self.client = client
 
     # Chat methods
 

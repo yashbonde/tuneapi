@@ -6,7 +6,6 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 # https://ai.google.dev/gemini-api/docs/function-calling
 
 import httpx
-import requests
 from pydantic import BaseModel
 from typing import get_args, get_origin, List, Optional, Dict, Any, Union, Tuple
 
@@ -25,11 +24,14 @@ class Gemini(tt.ModelInterface):
         api_token: Optional[str] = None,
         emebdding_url: Optional[str] = None,
     ):
+        super().__init__()
+
         self.model_id = id
         self.base_url = base_url
         self.api_token = api_token or tu.ENV.GEMINI_TOKEN("")
         self.extra_headers = extra_headers
         self.embedding_url = emebdding_url or base_url
+        self.client = None
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -202,7 +204,7 @@ class Gemini(tt.ModelInterface):
 
         if debug:
             fp = "sample_gemini.json"
-            print("Saving at path " + fp)
+            tu.logger.info("Saving gemini prompt at " + fp)
             tu.to_json(data, fp=fp)
 
         return url, headers, data
@@ -278,12 +280,14 @@ class Gemini(tt.ModelInterface):
             **kwargs,
         )
 
-        response = requests.post(
+        if self.client is None:
+            self.set_client()
+
+        response = self.client.post(
             url=url,
             headers=headers,
             params={"key": self.api_token},
             json=data,
-            stream=True,
             timeout=timeout,
         )
         try:
@@ -292,7 +296,10 @@ class Gemini(tt.ModelInterface):
             yield response.text
             raise e
 
-        yield from self._process_output(raw=raw, lines_fn=response.iter_lines)
+        yield from self._process_output(
+            raw=raw,
+            lines_fn=response.iter_lines,
+        )
 
     def chat(
         self,
@@ -318,6 +325,7 @@ class Gemini(tt.ModelInterface):
                 token=token,
                 timeout=timeout,
                 extra_headers=extra_headers,
+                debug=debug,
                 raw=False,
                 **kwargs,
             ):
@@ -325,7 +333,7 @@ class Gemini(tt.ModelInterface):
                     output = x
                 else:
                     output += x
-        except requests.HTTPError as e:
+        except httpx.HTTPError as e:
             print(e.response.text)
             raise e
 
@@ -358,19 +366,21 @@ class Gemini(tt.ModelInterface):
             **kwargs,
         )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url=url,
-                headers=headers,
-                params={"key": self.api_token},
-                json=data,
-                timeout=timeout,
-            )
-            try:
-                response.raise_for_status()
-            except Exception as e:
-                yield str(e)
-                return
+        if self.async_client is None:
+            self.set_async_client()
+
+        response = await self.async_client.post(
+            url=url,
+            headers=headers,
+            params={"key": self.api_token},
+            json=data,
+            timeout=timeout,
+        )
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            yield str(e)
+            return
 
         async for chunk in response.aiter_bytes():
             for x in self._process_output(
@@ -387,6 +397,7 @@ class Gemini(tt.ModelInterface):
         temperature: float = 1,
         token: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
+        debug: bool = False,
         timeout=(5, 60),
         **kwargs,
     ) -> Any:
@@ -402,6 +413,7 @@ class Gemini(tt.ModelInterface):
                 timeout=timeout,
                 extra_headers=extra_headers,
                 raw=False,
+                debug=debug,
                 **kwargs,
             ):
                 if isinstance(x, dict):
@@ -425,8 +437,9 @@ class Gemini(tt.ModelInterface):
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
-        pbar=True,
-        debug=False,
+        pbar: bool = True,
+        debug: bool = False,
+        time_metrics: bool = False,
         **kwargs,
     ):
         return distributed_chat(
@@ -437,6 +450,7 @@ class Gemini(tt.ModelInterface):
             retry=retry,
             pbar=pbar,
             debug=debug,
+            time_metrics=time_metrics,
             **kwargs,
         )
 
@@ -446,8 +460,9 @@ class Gemini(tt.ModelInterface):
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
-        pbar=True,
-        debug=False,
+        pbar: bool = True,
+        debug: bool = False,
+        time_metrics: bool = False,
         **kwargs,
     ):
         return await distributed_chat_async(
@@ -458,6 +473,7 @@ class Gemini(tt.ModelInterface):
             retry=retry,
             pbar=pbar,
             debug=debug,
+            time_metrics=time_metrics,
             **kwargs,
         )
 
@@ -511,7 +527,11 @@ class Gemini(tt.ModelInterface):
             model=model,
             extra_headers=extra_headers,
         )
-        response = requests.post(
+
+        if self.client is None:
+            self.set_client()
+
+        response = self.client.post(
             url=url,
             headers=headers,
             json=data,
@@ -520,7 +540,7 @@ class Gemini(tt.ModelInterface):
         )
         try:
             response.raise_for_status()
-        except requests.HTTPError as e:
+        except httpx.HTTPError as e:
             tu.logger.error(f"Cannot get emeddings: {response.text}")
             raise e
         except Exception as e:
@@ -547,22 +567,24 @@ class Gemini(tt.ModelInterface):
             extra_headers=extra_headers,
         )
 
-        async with httpx.AsyncClient() as client:  # Use a context manager for efficient connection pooling
-            try:
-                response = await client.post(
-                    url=url,
-                    headers=headers,
-                    json=data,
-                    timeout=timeout,
-                    params={"key": token or self.api_token},
-                )
-                response.raise_for_status()  # Raise an exception for bad status codes
-            except httpx.HTTPError as e:
-                tu.logger.error(f"Cannot get embeddings: {e.response.text}")
-                raise
-            except Exception as e:
-                tu.logger.error(e)
-                raise
+        if self.async_client is None:
+            self.set_async_client()
+
+        response = await self.async_client.post(
+            url=url,
+            headers=headers,
+            json=data,
+            timeout=timeout,
+            params={"key": token or self.api_token},
+        )
+        try:
+            response.raise_for_status()  # Raise an exception for bad status codes
+        except httpx.HTTPError as e:
+            tu.logger.error(f"Cannot get embeddings: {e.response.text}")
+            raise
+        except Exception as e:
+            tu.logger.error(e)
+            raise
 
         resp = response.json()
         if raw:
