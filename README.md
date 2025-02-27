@@ -1,5 +1,9 @@
-# Tune API
+# tuneapi
 
-This is **not** the official SDK for Tune AI. This is an open source python package used to build GenAI apps at Tune AI.
+A swiss knife python package for building application with LLMs. Very opinionated.
 
-> MIT License
+I originally built at Tune AI (nimblebox.ai) for building assistants. Was MIT licensed since conception I've forked and run the latest code.
+
+# license
+
+MIT License.

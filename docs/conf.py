@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.abspath("../"))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "tuneapi"
-copyright = "2024-2025, Frello Technologies"
-author = "Frello Technologies"
+copyright = "2025-2025, Yash Bonde"
+author = "Yash Bonde"
 release = "8.0.7"
 
 # -- General configuration ---------------------------------------------------

@@ -4,6 +4,8 @@ platform.
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
+# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# MIT License
 
 from functools import cache
 from typing import Optional, List

@@ -3,6 +3,8 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
+# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# MIT License
 
 from copy import deepcopy
 from typing import Optional, Dict, Any, List, Tuple

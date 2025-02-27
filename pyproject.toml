@@ -1,11 +1,14 @@
 [tool.poetry]
 name = "tuneapi"
 version = "8.0.7"
-description = "Tune AI APIs."
-authors = ["Frello Technology Private Limited <engineering@nimblebox.ai>"]
+description = "A swiss knife python package for building application with LLMs. Very opinionated."
+authors = [
+    "Yash Bonde <github.com/yashbonde>",
+    "Frello Technology Private Limited <engineering@nimblebox.ai>",
+]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/NimbleBoxAI/tuneapi"
+repository = "https://github.com/yashbonde/tuneapi"
 
 [tool.poetry.dependencies]
 python = "^3.10"

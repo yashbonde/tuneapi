@@ -3,6 +3,8 @@ Use the `Threads API <https://studio.tune.app/docs/concepts/finetuning>`_ for tr
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
+# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# MIT License
 
 import os
 import requests

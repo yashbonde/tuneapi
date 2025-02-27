@@ -1,4 +1,6 @@
 # Copyright © 2024-2025 Frello Technology Private Limited
+# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# MIT License
 
 # this file contains the code for the assistants API
 
