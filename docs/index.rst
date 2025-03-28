@@ -42,18 +42,16 @@ paste the following code snippet in the prompt to generate the code for LLM API 
     resp: str = model.chat(thread)
 
     # You can also generate structured response for better control
-    from pydantic import BaseModel, Field
-    from typing import List, Optional
 
-    class MathProblem(BaseModel):
-        a: int = Field(..., description="First number")
-        b: int = Field(..., description="Second number")
-        operator: str = Field(..., description="Operator")
-        hint: Optional[str] = Field(None, description="Hint for the problem")
+    class MathProblem(tt.BM):
+        a: int = tt.Field(..., description="First number")
+        b: int = tt.Field(..., description="Second number")
+        operator: str = tt.Field(..., description="Operator")
+        hint: tt.O[str] = Field(None, description="Hint for the problem")
 
-    class MathTest(BaseModel):
-        title: str = Field(..., description="Title of the test")
-        problems: List[MathProblem] = ... # only list of other BaseModel is allowed
+    class MathTest(tt.BM):
+        title: str = tt.Field(..., description="Title of the test")
+        problems: tt.L[MathProblem] # only list of other BaseModel is allowed
 
     # define a thread which is a collection of messages
     thread = tt.Thread(
