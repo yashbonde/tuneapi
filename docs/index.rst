@@ -64,6 +64,9 @@ paste the following code snippet in the prompt to generate the code for LLM API 
 
     # get structured output
     resp: MathTest = model.chat(thread)
+
+    # get multiple results in parallel
+    resp: tt.L[MathTest] = model.distributed_chat([thread for _ in range(5)])
     ```
 
 Structured generation
