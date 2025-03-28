@@ -7,6 +7,16 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.8
+-----
+
+- Adds ``pydantic.BaseModel`` as a native datastructure in ``tuneapi.types`` and can be used as ``tt.BM``.
+- [Breaking] the properties in a tool call are now abstracted as a seperate ``Prop`` class and equivalent changes
+  will have to be done
+- Fixes issue in turbo methods where progress bars were not closed properly.
+- ``tuneapi.utils.randomness.get_random_string`` now returns ``n`` unique strings so caller doesn't have to worry
+  about uniqueness
+
 8.0.7
 -----
 

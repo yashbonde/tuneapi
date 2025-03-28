@@ -58,6 +58,8 @@ def threaded_map(
                     errors.append(e)
                 else:
                     raise e
+    if _pbar:
+        _pbar.close()
     if safe:
         return results, errors
     return results

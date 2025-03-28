@@ -165,7 +165,7 @@ def distributed_chat(
         logger.info(f"Processing {len(prompts)} prompts with {max_threads} workers")
 
     # Initialize progress bar
-    _pbar = trange(len(prompts), unit=" APIs") if pbar else None
+    _pbar = trange(len(prompts), unit="Thread") if pbar else None
 
     # Queue initial tasks
     kwargs.update({"usage": usage})
@@ -229,7 +229,10 @@ def distributed_chat(
         return_items.append(_usage)
     if time_metrics:
         return_items.append(time_taken)
-    return tuple(return_items)
+
+    if len(return_items) > 1:
+        return tuple(return_items)
+    return return_items[0]
 
 
 async def distributed_chat_async(
@@ -244,7 +247,7 @@ async def distributed_chat_async(
     time_metrics: bool = False,
     **kwargs,
 ):
-    _pbar = trange(len(prompts), desc="Processing", unit=" input") if pbar else None
+    _pbar = trange(len(prompts), unit="Thread") if pbar else None
     results = [None for _ in range(len(prompts))]
     kwargs.update({"usage": usage})
 
@@ -323,7 +326,10 @@ async def distributed_chat_async(
         return_items.append(_usage)
     if time_metrics:
         return_items.append(time_taken)
-    return tuple(return_items)
+
+    if len(return_items) > 1:
+        return tuple(return_items)
+    return return_items[0]
 
 
 # helpers

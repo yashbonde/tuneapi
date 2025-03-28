@@ -11,13 +11,30 @@ from snowflake import SnowflakeGenerator
 from tuneapi.utils.logger import logger
 
 
-def get_random_string(length: int, numbers: bool = True, special: bool = False) -> str:
-    choice_items = string.ascii_letters
-    if numbers:
-        choice_items += string.digits
-    if special:
-        choice_items += string.punctuation
-    return "".join((random.choice(choice_items) for _ in range(length)))
+def get_random_string(
+    length: int,
+    numbers: bool = True,
+    special: bool = False,
+    n: int = 1,
+) -> str:
+    if n <= 1:
+        choice_items = string.ascii_letters
+        if numbers:
+            choice_items += string.digits
+        if special:
+            choice_items += string.punctuation
+        return "".join((random.choice(choice_items) for _ in range(length)))
+    elif 52**length < n:
+        raise ValueError(
+            f"You asked for {n} items which is impossible with length={length}"
+        )
+    else:
+        unq_items = set()
+        while len(unq_items) < n:
+            unq_items.add(
+                get_random_string(length=length, numbers=numbers, special=special)
+            )
+        return list(unq_items)
 
 
 class SFGen:

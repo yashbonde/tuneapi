@@ -17,7 +17,6 @@ import json
 import copy
 import httpx
 import random
-import requests
 import nutree as nt
 from PIL.Image import Image
 from functools import partial
@@ -37,42 +36,43 @@ import tuneapi.utils as tu
 ########################################################################################################################
 
 
-class Tool:
-    """A tool is a container for telling the LLM what it can do. This is a standard definition."""
+class Prop(BaseModel):
+    """
+    An individual property is called a prop.
+    """
 
-    class Prop:
-        """
-        An individual property is called a prop.
-        """
-
-        def __init__(
-            self,
-            name: str,
-            type: str,
-            required: bool = False,
-            description: Optional[str] = "",
-            items: Optional[Dict] = None,
-            enum: Optional[List[str]] = None,
-        ):
-            self.name = name
-            self.description = description
-            self.required = required
-            self.type = type
-            self.items = items
-            self.enum = enum
-
-        def __repr__(self) -> str:
-            return f"<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
+    name: str
+    type: str = Field(
+        ..., description="The kind of variable this is. 'number', 'text', 'enum', etc."
+    )
+    required: bool
 
     def __init__(
         self,
         name: str,
-        description: str,
-        parameters: List["Tool.Prop"],
+        type: str,
+        required: bool = False,
+        description: Optional[str] = "",
+        items: Optional[Dict] = None,
+        enum: Optional[List[str]] = None,
     ):
         self.name = name
         self.description = description
-        self.parameters = parameters
+        self.required = required
+        self.type = type
+        self.items = items
+        self.enum = enum
+
+    def __repr__(self) -> str:
+        return f"<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
+
+
+class Tool(BaseModel):
+    """A tool is a container for telling the LLM what it can do. This is a standard definition."""
+
+    name: str
+    description: str
+    parameters: List[Prop]
 
     def __repr__(self) -> str:
         return f"<Tool: {self.name}>"
@@ -108,7 +108,7 @@ class Tool:
             return cls.from_dict(x["function"])
         parameters = []
         for k, v in x["parameters"].get("properties", {}).items():
-            parameters.append(cls.Prop(name=k, **v))
+            parameters.append(Prop(name=k, **v))
         return cls(
             name=x["name"],
             description=x["description"],
@@ -329,6 +329,9 @@ class ModelInterface:
         self.base_url = ""
         self.client = None
         self.async_client = None
+
+    def __repr__(self):
+        return f"ta.{self.__class__.__name__}('{self.model_id}')"
 
     def set_api_token(self, token: str) -> None:
         """This are used to set the API token for the model"""
@@ -700,6 +703,9 @@ class Thread:
         thread.value_hash = hash(thread.values)
         return thread
 
+    def __len__(self) -> int:
+        return len(self.chats)
+
     # ser/deser
 
     def to_dict(self, full: bool = False):
@@ -738,6 +744,9 @@ class Thread:
             schema=data.get("schema", {}),
             **data.get("meta", {}),
         )
+
+    def copy(self) -> "Thread":
+        return self.from_dict(self.to_dict())
 
     def to_ft(
         self, id: Any = None, drop_last: bool = False

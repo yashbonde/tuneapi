@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "tuneapi"
-version = "8.0.7"
+version = "8.0.8"
 description = "A swiss knife python package for building application with LLMs. Very opinionated."
 authors = [
-    "Yash Bonde <github.com/yashbonde>",
+    "Yash Bonde",
     "Frello Technology Private Limited <engineering@nimblebox.ai>",
 ]
 license = "MIT"

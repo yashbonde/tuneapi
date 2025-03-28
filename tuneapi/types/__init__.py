@@ -2,6 +2,8 @@
 # Copyright © 2025-2025 Yash Bonde github.com/yashbonde
 # MIT License
 
+import functools
+
 from tuneapi.types.chats import (
     Message,
     Thread,
@@ -9,6 +11,7 @@ from tuneapi.types.chats import (
     ModelInterface,
     Usage,
     ThreadsTree,
+    Prop,
     Tool,
     EmbeddingGen,
     Transcript,
@@ -23,4 +26,11 @@ from tuneapi.types.chats import (
 
 from tuneapi.types.evals import (
     Evals,
+)
+
+from typing import Dict as D, List as L, Optional as O, Tuple as T
+
+from pydantic import (
+    BaseModel as BM,
+    Field as Field,
 )
