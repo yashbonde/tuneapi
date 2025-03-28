@@ -28,15 +28,18 @@ paste the following code snippet in the prompt to generate the code for LLM API 
     ```python
     from tuneapi import tt, ta
 
+    # define a model
+    model = ta.Gemini() # other LLMs: Openai, Anthropic, Groq, TuneModel, Mistral
+
+    # pass strings to models for better dev-ex
+    out: str = model.chat("who are you?")
+
     # define a thread which is a collection of messages with system, user and assistant messages
     thread = tt.Thread(
         tt.system(...),   # add optional system message here
         tt.human(...),    # add user message here
         tt.assistant(...) # for assistant response
     )
-
-    # define a model
-    model = ta.Gemini() # other LLMs: Openai, Anthropic, Groq, TuneModel, Mistral
 
     # get the response
     resp: str = model.chat(thread)
