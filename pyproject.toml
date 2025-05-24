@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tuneapi"
-version = "8.0.8"
+version = "8.0.9"
 description = "A swiss knife python package for building application with LLMs. Very opinionated."
 authors = [
     "Yash Bonde",
@@ -22,6 +22,7 @@ nutree = "0.8.0"
 pillow = "^10.2.0"
 httpx = "^0.28.1"
 pydantic = "^2.6.4"
+aiofiles = "^24.1.0"
 protobuf = { version = "^5.27.3", optional = true }
 boto3 = { version = "1.29.6", optional = true }
 
