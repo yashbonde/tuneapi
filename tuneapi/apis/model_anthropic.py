@@ -129,6 +129,27 @@ class Anthropic(tt.ModelInterface):
                 raise Exception(f"Unknown role: {m.role}")
             claude_messages.append(msg)
 
+        # if the last messag eis
+        if thread.schema:
+            assert (
+                claude_messages[-1]["role"] == thread.chats[-1].HUMAN
+            ), f"Last message should be from {thread.chats[-1].HUMAN} to generate structured output with Anthropic model."
+            resp_schema = thread.schema.model_json_schema()
+            resp_schema["additionalProperties"] = False
+            for _, defs in resp_schema.get("$defs", dict()).items():
+                defs["additionalProperties"] = False
+            claude_messages[-1]["content"].append(
+                {
+                    "type": "text",
+                    "text": (
+                        "You are given this JSON schema. You will generate only the output filled in this schema and "
+                        "nothing else. No thinking or extra tokens. Only the JSON. It is crucial you do this because "
+                        "the response text will be parsed from JSON. If it fails, everything has gone to waste. Here "
+                        "is the schema:\n\n" + tu.to_json(resp_schema)
+                    ),
+                }
+            )
+
         return system, claude_messages
 
     def _process_input(
@@ -277,6 +298,9 @@ class Anthropic(tt.ModelInterface):
         if fn_call:
             output = fn_call
 
+        if isinstance(chats, tt.Thread) and chats.schema:
+            output = chats.schema(**tu.from_json(output))
+
         if usage:
             return output, usage_obj
         return output
@@ -359,9 +383,12 @@ class Anthropic(tt.ModelInterface):
                 usage_obj = i
             else:
                 output += i
-
         if fn_call:
             output = fn_call
+
+        if isinstance(chats, tt.Thread) and chats.schema:
+            output = chats.schema(**tu.from_json(output))
+
         if usage:
             return output, usage_obj
         return output

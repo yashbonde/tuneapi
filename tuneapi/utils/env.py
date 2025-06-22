@@ -17,6 +17,20 @@ class _ENV:
         self.vars_called.add(__name)
         return lambda x="": os.getenv(__name, x)
 
+    def get(self, __name: str):
+        try:
+            out = os.getenv(__name)
+            self.vars_called.add(__name)
+            return out
+        except Exception as e:
+            raise e
+
+    def get_called_vars(self) -> list[str]:
+        return list(self.vars_called)
+
+    def get_called_vars(self) -> list[str]:
+        return list(self.vars_called)
+
 
 ENV = _ENV()
 """

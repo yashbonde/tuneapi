@@ -1,41 +1,56 @@
-[tool.poetry]
+[project]
 name = "tuneapi"
-version = "8.0.9"
+version = "8.0.12"
 description = "A swiss knife python package for building application with LLMs. Very opinionated."
-authors = [
-    "Yash Bonde",
-    "Frello Technology Private Limited <engineering@nimblebox.ai>",
-]
-license = "MIT"
 readme = "README.md"
-repository = "https://github.com/yashbonde/tuneapi"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Yash Bonde" },
+    { name = "Frello Technology Private Limited", email = "engineering@nimblebox.ai" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+keywords = ["llm", "api", "ai", "machine-learning", "language-models"]
+dependencies = [
+    "fire==0.7.0",
+    "requests>=2.31.0",
+    "cloudpickle==3.0.0",
+    "cryptography>=42.0.5",
+    "tqdm>=4.66.1",
+    "snowflake_id==1.0.2",
+    "nutree==0.8.0",
+    "pillow>=10.2.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.6.4",
+    "aiofiles>=24.1.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-fire = "0.7.0"
-requests = "^2.31.0"
-cloudpickle = "3.0.0"
-cryptography = ">=42.0.5"
-tqdm = "^4.66.1"
-snowflake_id = "1.0.2"
-nutree = "0.8.0"
-pillow = "^10.2.0"
-httpx = "^0.28.1"
-pydantic = "^2.6.4"
-aiofiles = "^24.1.0"
-protobuf = { version = "^5.27.3", optional = true }
-boto3 = { version = "1.29.6", optional = true }
+[project.optional-dependencies]
+boto3 = ["boto3==1.29.6"]
+protobuf = ["protobuf>=5.27.3"]
+all = ["boto3==1.29.6", "protobuf>=5.27.3"]
 
-[tool.poetry.extras]
-boto3 = ["boto3"]
-protobuf = ["protobuf"]
-all = ["boto3", "protobuf"]
-
-[tool.poetry.group.dev.dependencies]
-sphinx = "7.2.5"
-sphinx_rtd_theme = "1.3.0"
-poetry = "1.6.1"
+[project.urls]
+Homepage = "https://github.com/yashbonde/tuneapi"
+Repository = "https://github.com/yashbonde/tuneapi.git"
+Documentation = "https://github.com/yashbonde/tuneapi#readme"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "sphinx==7.2.5",
+    "sphinx_rtd_theme==1.3.0",
+    "poetry==1.6.1",
+    "twine>=6.1.0",
+]

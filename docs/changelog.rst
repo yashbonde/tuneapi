@@ -7,6 +7,11 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.12
+------
+
+- Add code in Anthropic API to fix structured generation.
+
 8.0.8
 -----
 
@@ -175,22 +180,22 @@ All relevant steps to be taken will be mentioned here.
 - Moved ``tuneapi.types.experimental`` to ``tuneapi.types.evals``
 
 0.5.13
------
+------
 
 - ``tuneapi.types.ModelInterface`` has an ``extra_headers`` attribute in it.
 
 0.5.12
------
+------
 
 - Remove code to sanitize assistant message in for Tune and OpenAI LLM APIs.
 
 0.5.11
------
+------
 
 - Fix bug where ``parallel_tool_calls`` was sent even for non tool calls.
 
 0.5.10
------
+------
 
 - Remove redundant prints.
 
@@ -253,7 +258,7 @@ All relevant steps to be taken will be mentioned here.
 In this release we have moved all the Tune Studio specific API out of ``tuneapi.apis`` to ``tuneapi.endpoints`` to avoid
 cluttering the ``apis`` namespace.
 
-.. code-block:: patch
+.. code-block:: diff
 
     - from tuneapi import apis as ta
     + from tuneapi import endpoints as te

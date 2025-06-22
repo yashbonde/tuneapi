@@ -50,23 +50,20 @@ paste the following code snippet in the prompt to generate the code for LLM API 
         a: int = tt.Field(..., description="First number")
         b: int = tt.Field(..., description="Second number")
         operator: str = tt.Field(..., description="Operator")
-        hint: tt.O[str] = Field(None, description="Hint for the problem")
+        hint: str | None = tt.Field(None, description="Hint for the problem")
 
     class MathTest(tt.BM):
         title: str = tt.Field(..., description="Title of the test")
-        problems: tt.L[MathProblem] # only list of other BaseModel is allowed
+        problems: list[MathProblem]  # only list of other BaseModel is allowed
 
     # define a thread which is a collection of messages
-    thread = tt.Thread(
-        tt.human("Give me 5 problems for KG-1 class"),
-        schema=MathTest
-    )
+    thread = tt.Thread(tt.human("Give me 5 problems for KG-1 class"), schema=MathTest)
 
     # get structured output
     resp: MathTest = model.chat(thread)
 
     # get multiple results in parallel
-    resp: tt.L[MathTest] = model.distributed_chat([thread for _ in range(5)])
+    resp: list[MathTest] = model.distributed_chat([thread for _ in range(5)])
     ```
 
 Structured generation
@@ -86,9 +83,5 @@ only ``List[BaseModel]`` is allowed.
    :maxdepth: 2
    :caption: Contents:
 
-   source/tuneapi.apis
-   source/tuneapi.types
-   source/tuneapi.utils
-   source/tuneapi.endpoints
    changelog
 
