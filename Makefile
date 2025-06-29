@@ -13,6 +13,8 @@ setup:
 	uv sync
 
 # This upload the package to PyPI. This can only be run by me.
+# Before bumping version make sure pyproject.toml and docs/conf.py are updated.
+# Also add updates to the changelog.
 upload_to_pypi:
 	@echo "Building package..."
 	uv sync

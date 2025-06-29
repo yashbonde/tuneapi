@@ -2,30 +2,28 @@
 This file contains all the datatypes relevant for a chat conversation. In general this is the nomenclature that we follow:
     * Message: a unit of information produced by a ``role``
     * Thread: a group of messages is called a thread. There can be many 2 types of threads, linear and tree based.
-    * ThreadsList: a group of linear threads is called a threads list.
+    * Threadslist: a group of linear threads is called a threads list.
     * Dataset: a container for grouping threads lists is called a dataset
 
 Almost all the classes contain ``to_dict`` and ``from_dict`` for serialisation and deserialisation.
 """
 
-# Copyright © 2023- Frello Technology Private Limited
+# Copyright © 2024-2025 Frello Technology Private Limited
+# Copyright © 2025- Yash Bonde github.com/yashbonde
 
 import io
 import os
 import re
-import json
 import copy
 import httpx
-import random
 import nutree as nt
-from PIL.Image import Image
 from functools import partial
-from collections.abc import Iterable
-from pydantic import BaseModel, Field
+from abc import ABC, abstractmethod
 from PIL.Image import Image as ImageType
-from typing import Dict, List, Any, Tuple, Optional, Generator, Union
+from typing import Any, Callable, Generator
 
 import tuneapi.utils as tu
+from tuneapi.types.bm import BM, F
 
 
 ########################################################################################################################
@@ -36,15 +34,13 @@ import tuneapi.utils as tu
 ########################################################################################################################
 
 
-class Prop(BaseModel):
+class Prop(BM):
     """
     An individual property is called a prop.
     """
 
     name: str
-    type: str = Field(
-        ..., description="The kind of variable this is. 'number', 'text', 'enum', etc."
-    )
+    type: str = F("The kind of variable this is. 'number', 'text', 'enum', etc.")
     required: bool
 
     def __init__(
@@ -52,9 +48,9 @@ class Prop(BaseModel):
         name: str,
         type: str,
         required: bool = False,
-        description: Optional[str] = "",
-        items: Optional[Dict] = None,
-        enum: Optional[List[str]] = None,
+        description: str | None = "",
+        items: dict | None = None,
+        enum: list[str] | None = None,
     ):
         self.name = name
         self.description = description
@@ -67,12 +63,12 @@ class Prop(BaseModel):
         return f"<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
 
 
-class Tool(BaseModel):
+class Tool(BM):
     """A tool is a container for telling the LLM what it can do. This is a standard definition."""
 
     name: str
     description: str
-    parameters: List[Prop]
+    parameters: list[Prop]
 
     def __repr__(self) -> str:
         return f"<Tool: {self.name}>"
@@ -159,9 +155,9 @@ class Message:
     # start initialization here
     def __init__(
         self,
-        value: str | List[Dict[str, Any]],
+        value: str | list[dict[str, Any]],
         role: str,
-        images: List[str | Image] = [],
+        images: list[str | ImageType] = [],
         id: str = None,
         **kwargs,
     ):
@@ -176,7 +172,7 @@ class Message:
         self.metadata = kwargs
         self.images = images
         for i, img in enumerate(self.images):
-            if isinstance(img, Image):
+            if isinstance(img, ImageType):
                 buf = io.BytesIO()
                 img.save(buf, "png")
                 self.images[i] = tu.to_b64(buf.getvalue())
@@ -221,7 +217,7 @@ class Message:
 
     def to_dict(
         self,
-        format: Optional[str] = None,
+        format: str | None = None,
         meta: bool = False,
     ):
         """
@@ -243,7 +239,7 @@ class Message:
             elif self.role == self.GPT:
                 role = "assistant"
 
-        chat_message: Dict[str, str | float]
+        chat_message: dict[str, str | float]
         if ft:
             chat_message = {"from": role}
         else:
@@ -295,312 +291,6 @@ function_resp = partial(Message, role=Message.FUNCTION_RESP)
 
 ########################################################################################################################
 #
-# The code in this section contains a default model interface that each model API has to provide. All the APIs should
-# follow this interface to be compatible with the chat API.
-#
-########################################################################################################################
-
-
-class ModelInterface:
-    """This is the generic interface implemented by all the model APIs"""
-
-    model_id: str
-    """This is the model ID for the model"""
-
-    api_token: str
-    """This is the API token for the model"""
-
-    extra_headers: Dict[str, Any]
-    """This is the placeholder for any extra headers to be passed during request"""
-
-    base_url: str
-    """This is the default URL that has to be pinged. This may not be the REST endpoint URL but anything"""
-
-    client: httpx.Client
-    """This is the client that is used to make the requests"""
-
-    async_client: httpx.AsyncClient
-    """This is the async client that is used to make the requests"""
-
-    def __init__(self):
-        self.model_id = ""
-        self.api_token = ""
-        self.extra_headers = {}
-        self.base_url = ""
-        self.client = None
-        self.async_client = None
-
-    def __repr__(self):
-        return f"ta.{self.__class__.__name__}('{self.model_id}')"
-
-    def set_api_token(self, token: str) -> None:
-        """This are used to set the API token for the model"""
-        self.api_token = token
-
-    def set_async_client(self, client: httpx.AsyncClient = None):
-        if client is None:
-            client = httpx.AsyncClient()
-        self.async_client = client
-
-    def set_client(self, client: httpx.Client = None):
-        if client is None:
-            client = httpx.Client()
-        self.client = client
-
-    # Chat methods
-
-    def stream_chat(
-        self,
-        chats: Union["Thread", str],
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
-        usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        debug: bool = False,
-        raw: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ):
-        """This is the blocking function to stream chat with the model where each token is iteratively generated"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    def chat(
-        self,
-        chats: Union["Thread", str],
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
-        usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        debug: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ) -> str | Dict[str, Any]:
-        """This is the blocking function to block chat with the model"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    async def stream_chat_async(
-        self,
-        chats: Union["Thread", str],
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
-        usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        debug: bool = False,
-        raw: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ) -> str | Dict[str, Any]:
-        """This is the async function to stream chat with the model where each token is iteratively generated"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    async def chat_async(
-        self,
-        chats: Union["Thread", str],
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
-        usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        debug: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ) -> str | Dict[str, Any]:
-        """This is the async function to block chat with the model"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    def distributed_chat(
-        self,
-        prompts: List["Thread"],
-        post_logic: Optional[callable] = None,
-        max_threads: int = 10,
-        retry: int = 3,
-        pbar=True,
-        debug=False,
-        **kwargs,
-    ):
-        """This is the blocking function to chat with the model in a distributed manner"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    async def distributed_chat_async(
-        self,
-        prompts: List["Thread"],
-        post_logic: Optional[callable] = None,
-        max_threads: int = 10,
-        retry: int = 3,
-        pbar=True,
-        debug=False,
-        **kwargs,
-    ):
-        """This is the async function to chat with the model in a distributed manner"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    # Embedding methods
-
-    def embedding(
-        self,
-        chats: "Thread" | List[str] | str,
-        model: str,
-        token: Optional[str],
-        timeout: Tuple[int, int],
-        raw: bool,
-        extra_headers: Optional[Dict[str, str]],
-    ) -> "EmbeddingGen":
-        """This is the blocking function to get embeddings for the chat"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    async def embedding_async(
-        self,
-        chats: "Thread" | List[str] | str,
-        model: str,
-        token: Optional[str],
-        timeout: Tuple[int, int],
-        raw: bool,
-        extra_headers: Optional[Dict[str, str]],
-    ) -> "EmbeddingGen":
-        """This is the async function to get embeddings for the chat"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    # Image methods
-
-    def image_gen(
-        self,
-        prompt: str,
-        style: str,
-        model: str,
-        n: int,
-        size: str,
-        **kwargs,
-    ) -> "ImageGen":
-        """This is the blocking function to generate images"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    async def image_gen_async(
-        self,
-        prompt: str,
-        style: str,
-        model: str,
-        n: int,
-        size: str,
-        **kwargs,
-    ) -> "ImageGen":
-        """This is the async function to generate images"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    # Speech methods
-
-    def speech_to_text(
-        self,
-        prompt: str,
-        audio: str,
-        model: str,
-        timestamp_granularities: List[str],
-        **kwargs,
-    ) -> "Transcript":
-        """This is the blocking function to convert speech to text"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    async def speech_to_text_async(
-        self,
-        prompt: str,
-        audio: str,
-        model: str,
-        timestamp_granularities=["segment"],
-        **kwargs,
-    ) -> "Transcript":
-        """This is the async function to convert speech to text"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    # batching
-
-    def submit_batch(
-        self,
-        threads: List[Union["Thread", str]],
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
-        debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout=(5, 30),
-        raw: bool = False,
-        **kwargs,
-    ) -> Tuple[str, List[str]] | Dict:
-        """This is the blocking function to submit a batch of threads. It will return the batch_id and custom_ids
-        for ordering the responses"""
-        raise NotImplementedError("This model has no operation for this.")
-
-    def get_batch(
-        self,
-        batch_id: str,
-        custom_ids: Optional[List[str]] = None,
-        token: Optional[str] = None,
-        raw: bool = False,
-    ) -> Tuple[Union[List[Any], Dict], Union[str, None]]:
-        """This is the blocking function to get the batch results"""
-        raise NotImplementedError("This model has no operation for this.")
-
-
-class Usage:
-    def __init__(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        cached_tokens: Optional[int] = 0,
-        **kwargs,
-    ):
-        self.input_tokens = input_tokens
-        self.output_tokens = output_tokens
-        self.cached_tokens = cached_tokens
-        self.total_tokens = input_tokens + output_tokens
-        self.extra = kwargs
-
-    def __getitem__(self, x):
-        return getattr(self, x)
-
-    def __repr__(self) -> str:
-        return f"<Usage: {self.input_tokens} [Cached: {self.cached_tokens}] -> {self.output_tokens}>"
-
-    def __radd__(self, other: "Usage"):
-        return Usage(
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            cached_tokens=self.cached_tokens + other.cached_tokens,
-        )
-
-    def __add__(self, other: "Usage"):
-        return Usage(
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            cached_tokens=self.cached_tokens + other.cached_tokens,
-        )
-
-    def to_json(self, *a, **k) -> str:
-        return tu.to_json(self.__dict__, *a, **k)
-
-    def cost(
-        self,
-        input_token_per_million: float,
-        cache_token_per_million: float,
-        output_token_per_million: float,
-    ) -> float:
-        return (
-            self.input_tokens * input_token_per_million / 1e6
-            + self.cached_tokens * cache_token_per_million / 1e6
-            + self.output_tokens * output_token_per_million / 1e6
-        )
-
-
-########################################################################################################################
-#
 # Thread is an array of Messages and / or Tools.
 #
 ########################################################################################################################
@@ -612,18 +302,18 @@ class Thread:
     below for more information.
 
     Args:
-        *chats: List of chat ``Message`` objects
+        *chats: list of chat ``Message`` objects
     """
 
     def __init__(
         self,
-        *chats: Union[List[Message], Message],
-        evals: Optional[Dict[str, Any]] = None,
-        model: Optional[str] = None,
+        *chats: list[Message] | Message,
+        evals: dict[str, Any] | None = None,
+        model: str | None = None,
         id: str = "",
         title: str = "",
-        tools: Optional[List[Tool]] = None,
-        schema: Optional[BaseModel] = None,
+        tools: list[Tool] | None = None,
+        schema: BM | None = None,
         **kwargs,
     ):
         self.chats = list(chats)
@@ -726,7 +416,7 @@ class Thread:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Thread":
+    def from_dict(cls, data: dict[str, Any]) -> "Thread":
         chats = (
             data.get("chats", [])
             or data.get("conversations", [])
@@ -750,7 +440,7 @@ class Thread:
 
     def to_ft(
         self, id: Any = None, drop_last: bool = False
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         chats = self.chats if not drop_last else self.chats[:-1]
         ft_dict = {
             "id": id or tu.get_random_string(6),
@@ -818,6 +508,353 @@ class Thread:
 
 ########################################################################################################################
 #
+# The code in this section contains a default model interface that each model API has to provide. All the APIs should
+# follow this interface to be compatible with the chat API.
+#
+########################################################################################################################
+
+
+class ModelInterface(ABC):
+    """This is the generic abstract interface implemented by all the model APIs"""
+
+    model_id: str
+    """This is the model ID for the model"""
+
+    api_token: str
+    """This is the API token for the model"""
+
+    extra_headers: dict[str, Any]
+    """This is the placeholder for any extra headers to be passed during request"""
+
+    base_url: str
+    """This is the default URL that has to be pinged. This may not be the REST endpoint URL but anything"""
+
+    client: httpx.Client | None
+    """This is the client that is used to make the requests"""
+
+    async_client: httpx.AsyncClient | None
+    """This is the async client that is used to make the requests"""
+
+    def __init__(self):
+        self.model_id = ""
+        self.api_token = ""
+        self.extra_headers = {}
+        self.base_url = ""
+        self.client = None
+        self.async_client = None
+
+    def __repr__(self):
+        return f"ta.{self.__class__.__name__}('{self.model_id}')"
+
+    def set_api_token(self, token: str) -> None:
+        """This are used to set the API token for the model"""
+        self.api_token = token
+
+    def set_async_client(self, client: httpx.AsyncClient | None = None):
+        if client is None:
+            client = httpx.AsyncClient()
+        self.async_client = client
+
+    def set_client(self, client: httpx.Client | None = None):
+        if client is None:
+            client = httpx.Client()
+        self.client = client
+
+    # Chat methods
+
+    @abstractmethod
+    def stream_chat(
+        self,
+        chats: Thread | str,
+        model: str | None = None,
+        max_tokens: int = None,
+        temperature: float = 1,
+        token: str | None = None,
+        usage: bool = False,
+        extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        raw: bool = False,
+        timeout=(5, 60),
+        **kwargs,
+    ):
+        """This is the blocking function to stream chat with the model where each token is iteratively generated"""
+        pass
+
+    @abstractmethod
+    def chat(
+        self,
+        chats: Thread | str,
+        model: str | None = None,
+        max_tokens: int = None,
+        temperature: float = 1,
+        parallel_tool_calls: bool = False,
+        token: str | None = None,
+        usage: bool = False,
+        extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        timeout=(5, 60),
+        **kwargs,
+    ) -> str | dict[str, Any]:
+        """This is the blocking function to block chat with the model"""
+        pass
+
+    @abstractmethod
+    async def stream_chat_async(
+        self,
+        chats: Thread | str,
+        model: str | None = None,
+        max_tokens: int = None,
+        temperature: float = 1,
+        token: str | None = None,
+        usage: bool = False,
+        extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        raw: bool = False,
+        timeout=(5, 60),
+        **kwargs,
+    ) -> str | dict[str, Any]:
+        """This is the async function to stream chat with the model where each token is iteratively generated"""
+        pass
+
+    @abstractmethod
+    async def chat_async(
+        self,
+        chats: Thread | str,
+        model: str | None = None,
+        max_tokens: int = None,
+        temperature: float = 1,
+        parallel_tool_calls: bool = False,
+        token: str | None = None,
+        usage: bool = False,
+        extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        timeout=(5, 60),
+        **kwargs,
+    ) -> str | dict[str, Any]:
+        """This is the async function to block chat with the model"""
+        pass
+
+    @abstractmethod
+    def distributed_chat(
+        self,
+        prompts: list[Thread],
+        post_logic: Callable | None = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+        debug=False,
+        **kwargs,
+    ):
+        """This is the blocking function to chat with the model in a distributed manner"""
+        pass
+
+    @abstractmethod
+    async def distributed_chat_async(
+        self,
+        prompts: list[Thread],
+        post_logic: Callable | None = None,
+        max_threads: int = 10,
+        retry: int = 3,
+        pbar=True,
+        debug=False,
+        **kwargs,
+    ):
+        """This is the async function to chat with the model in a distributed manner"""
+        pass
+
+    # Embedding methods
+
+    @abstractmethod
+    def embedding(
+        self,
+        chats: Thread | list[str] | str,
+        model: str,
+        token: str | None,
+        timeout: tuple[int, int],
+        raw: bool,
+        extra_headers: dict[str, str] | None,
+    ) -> "EmbeddingGen":
+        """This is the blocking function to get embeddings for the chat"""
+        pass
+
+    @abstractmethod
+    async def embedding_async(
+        self,
+        chats: Thread | list[str] | str,
+        model: str,
+        token: str | None,
+        timeout: tuple[int, int],
+        raw: bool,
+        extra_headers: dict[str, str] | None,
+    ) -> "EmbeddingGen":
+        """This is the async function to get embeddings for the chat"""
+        pass
+
+    # Image methods
+
+    @abstractmethod
+    def image_gen(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> "ImageGen":
+        """This is the blocking function to generate images"""
+        pass
+
+    @abstractmethod
+    async def image_gen_async(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> "ImageGen":
+        """This is the async function to generate images"""
+        pass
+
+    # Speech methods
+    @abstractmethod
+    def text_to_speech(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
+        **kwargs,
+    ) -> bytes:
+        """This is the blocking function to convert text to speech"""
+        pass
+
+    @abstractmethod
+    async def text_to_speech_async(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
+        **kwargs,
+    ) -> bytes:
+        """This is the async function to convert text to speech"""
+        pass
+
+    @abstractmethod
+    def speech_to_text(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities: list[str],
+        **kwargs,
+    ) -> "Transcript":
+        """This is the blocking function to convert speech to text"""
+        pass
+
+    @abstractmethod
+    async def speech_to_text_async(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities=["segment"],
+        **kwargs,
+    ) -> "Transcript":
+        """This is the async function to convert speech to text"""
+        pass
+
+    # batching
+
+    @abstractmethod
+    def submit_batch(
+        self,
+        threads: list[Thread | str],
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float | None = None,
+        token: str | None = None,
+        debug: bool = False,
+        extra_headers: dict[str, str] | None = None,
+        timeout=(5, 30),
+        raw: bool = False,
+        **kwargs,
+    ) -> tuple[str, list[str]] | dict:
+        """This is the blocking function to submit a batch of threads. It will return the batch_id and custom_ids
+        for ordering the responses"""
+        pass
+
+    @abstractmethod
+    def get_batch(
+        self,
+        batch_id: str,
+        custom_ids: list[str] | None = None,
+        token: str | None = None,
+        raw: bool = False,
+    ) -> tuple[list[Any] | dict, str | None]:
+        """This is the blocking function to get the batch results"""
+        pass
+
+
+class Usage:
+    def __init__(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cached_tokens: int | None = 0,
+        **kwargs,
+    ):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cached_tokens = cached_tokens
+        self.total_tokens = input_tokens + output_tokens
+        self.extra = kwargs
+
+    def __getitem__(self, x):
+        return getattr(self, x)
+
+    def __repr__(self) -> str:
+        return f"<Usage: {self.input_tokens} [Cached: {self.cached_tokens}] -> {self.output_tokens}>"
+
+    def __radd__(self, other: "Usage"):
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+        )
+
+    def __add__(self, other: "Usage"):
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+        )
+
+    def to_json(self, *a, **k) -> str:
+        return tu.to_json(self.__dict__, *a, **k)
+
+    def cost(
+        self,
+        input_token_per_million: float,
+        cache_token_per_million: float,
+        output_token_per_million: float,
+    ) -> float:
+        return (
+            self.input_tokens * input_token_per_million / 1e6
+            + self.cached_tokens * cache_token_per_million / 1e6
+            + self.output_tokens * output_token_per_million / 1e6
+        )
+
+
+########################################################################################################################
+#
 # The code here is the ultimate representation of thoughts and processes. A tree of messages is a ThreadsTree.
 #
 ########################################################################################################################
@@ -829,9 +866,7 @@ class ThreadsTree:
     searching through a tree of conversations. This is a container providing all the necessary APIs.
     """
 
-    def __init__(
-        self, *msgs: Union[List[Union[List, Message]], Message], id: str = None
-    ):
+    def __init__(self, *msgs: list[list[Message] | Message], id: str = None):
         system = None
         if len(msgs):
             if isinstance(msgs[0], Message) and msgs[0].role == Message.SYSTEM:
@@ -845,7 +880,7 @@ class ThreadsTree:
         self.system = system
         self.msg_counter = 0  # monotonically increasing counter
         self.messages_map = {}
-        self.messages: Dict[str, Message] = {}
+        self.messages: dict[str, Message] = {}
 
         self.tree = nt.Tree()
         if msgs:
@@ -880,8 +915,8 @@ class ThreadsTree:
 
     def _add_children_to_parent(
         self,
-        parent_node: Union[nt.Tree, nt.Node],
-        children: List[Union[List, Message]],
+        parent_node: nt.Tree | nt.Node,
+        children: list[list[Message] | Message],
     ) -> None:
         for child in children:
             if isinstance(child, Message):
@@ -958,7 +993,7 @@ class ThreadsTree:
         self.tree.visit(_update_breadth)
         return brt
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "system": self.system,
@@ -968,7 +1003,7 @@ class ThreadsTree:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ThreadsTree":
+    def from_dict(cls, data: dict[str, Any]) -> "ThreadsTree":
         tree = cls()
         tree.id = data.get("id", "tree_" + str(tu.get_snowflake()))
         tree.system = data["system"]
@@ -1177,247 +1212,6 @@ class ThreadsTree:
 
 ########################################################################################################################
 #
-# The code in this section is copied from another repository which was originally used for research (r-stack)
-#
-########################################################################################################################
-
-
-class ThreadsList(list):
-    """This class implements some basic container methods for a list of Chat objects"""
-
-    def __init__(self):
-        self.keys = {}
-        self.items: List[Thread] = []
-        self.idx_dict: Dict[int, Tuple[Any, ...]] = {}
-        self.key_to_items_idx: Dict[int, List[int]] = {}
-
-    def __repr__(self) -> str:
-        return f"ThreadsList(unq_keys={len(self.key_to_items_idx)}, items={len(self.items)})"
-
-    def __len__(self) -> int:
-        return len(self.items)
-
-    def __iter__(self) -> Generator[Thread, None, None]:
-        for x in self.items:
-            yield x
-
-    def __getitem__(self, __index) -> List[Thread]:
-        return self.items[__index]
-
-    def table(self) -> str:
-        try:
-            from tabulate import tabulate
-        except ImportError:
-            raise ImportError("Install tabulate to use this method")
-
-        table = []
-        for k, v in self.idx_dict.items():
-            table.append(
-                [
-                    *v,
-                    len(self.key_to_items_idx[k]),
-                    f"{len(self.key_to_items_idx[k])/len(self)*100:0.2f}%",
-                ]
-            )
-        return tabulate(table, headers=[*list(self.keys), "count", "percentage"])
-
-    # data manipulation
-
-    def append(self, __object: Thread) -> None:
-        if not self.items:
-            self.keys = __object.meta.keys()
-        if self.keys != __object.meta.keys():
-            raise ValueError("Keys should match")
-        self.idx_dict.setdefault(__object.value_hash, __object.values)
-        self.key_to_items_idx.setdefault(__object.value_hash, [])
-        self.key_to_items_idx[__object.value_hash].append(len(self.items))
-        self.items.append(__object)
-
-    def add(self, x: Thread):
-        return self.append(x)
-
-    def extend(self, __iterable: Iterable) -> None:
-        if hasattr(__iterable, "items"):
-            for x in __iterable.items:  # type: ignore
-                self.append(x)
-        elif isinstance(__iterable, Iterable):
-            for x in __iterable:
-                self.append(x)
-        else:
-            raise ValueError("Unknown iterable")
-
-    def shuffle(self, seed: Optional[int] = None) -> None:
-        """Perform in place shuffle"""
-        # shuffle using indices, self.items and self.key_to_items_idx
-        idx = list(range(len(self.items)))
-        if seed:
-            rng = random.Random(seed)
-            rng.shuffle(idx)
-        else:
-            random.shuffle(idx)
-        self.items = [self.items[i] for i in idx]
-        self.key_to_items_idx = {}
-        for i, x in enumerate(self.items):
-            self.key_to_items_idx.setdefault(x.value_hash, [])
-            self.key_to_items_idx[x.value_hash].append(i)
-
-    def create_te_split(
-        self, test_items: int | float = 0.1
-    ) -> Tuple["ThreadsList", ...]:
-        try:
-            import numpy as np
-        except ImportError:
-            raise ImportError("Install numpy to use ``create_te_split`` method")
-
-        train_ds = ThreadsList()
-        eval_ds = ThreadsList()
-        items_np_arr = np.array(self.items)
-        for k, v in self.key_to_items_idx.items():
-            if isinstance(test_items, float):
-                if int(len(v) * test_items) < 1:
-                    raise ValueError(
-                        f"Test percentage {test_items} is too high for the dataset key '{k}'"
-                    )
-                split_ids = random.sample(v, int(len(v) * test_items))
-            else:
-                if test_items > len(v):
-                    raise ValueError(
-                        f"Test items {test_items} is too high for the dataset key '{k}'"
-                    )
-                split_ids = random.sample(v, test_items)
-
-            # get items
-            eval_items = items_np_arr[split_ids]
-            train_items = items_np_arr[np.setdiff1d(v, split_ids)]
-            train_ds.extend(train_items)
-            eval_ds.extend(eval_items)
-
-        return train_ds, eval_ds
-
-    # ser / deser
-
-    def to_dict(self):
-        return {"items": [x.to_dict() for x in self.items]}
-
-    @classmethod
-    def from_dict(cls, data):
-        bench_dataset = cls()
-        for item in data["items"]:
-            bench_dataset.append(Thread.from_dict(item))
-        return bench_dataset
-
-    def to_disk(self, folder: str, fmt: Optional[str] = None, override: bool = False):
-        if fmt:
-            tu.logger.warn(
-                f"exporting to {fmt} format, you cannot recreate the dataset from this."
-            )
-        os.makedirs(folder, exist_ok=override)
-        fp = f"{folder}/tuneds.jsonl"
-        with open(fp, "w") as f:
-            for sample in self.items:
-                if fmt == "ft":
-                    item, _ = sample.to_ft()
-                elif fmt == "full":
-                    item = sample.to_dict(full=True)
-                elif fmt is None:
-                    item = sample.to_dict()
-                else:
-                    raise ValueError(f"Unknown format: {fmt}")
-                f.write(tu.to_json(item, tight=True) + "\n")  # type: ignore
-        return fp
-
-    @classmethod
-    def from_disk(cls, folder: str):
-        bench_dataset = cls()
-        with open(f"{folder}/tuneds.jsonl", "r") as f:
-            for line in f:
-                item = json.loads(line)
-                bench_dataset.append(Thread.from_dict(item))
-        return bench_dataset
-
-    def to_hf_dataset(self) -> Tuple["datasets.Dataset", List]:  # type: ignore
-        try:
-            import datasets as dst
-        except ImportError:
-            raise ImportError("Install huggingface datasets library to use this method")
-
-        _ds_list = []
-        meta_list = []
-        for x in self.items:
-            sample, meta = x.to_ft()
-            _ds_list.append(sample)
-            meta_list.append(meta)
-        return dst.Dataset.from_list(_ds_list), meta_list
-
-
-class Dataset:
-    """This class is a container for training and evaulation datasets, useful for serialising items to and from disk"""
-
-    def __init__(self, train: ThreadsList, eval: ThreadsList):
-        self.train_ds = train
-        self.eval_ds = eval
-
-    def __repr__(self) -> str:
-        return f"Dataset(\n  train={self.train_ds},\n  eval={self.eval_ds}\n)"
-
-    @classmethod
-    def from_list(cls, items: List["Dataset"]):
-        train_ds = ThreadsList()
-        eval_ds = ThreadsList()
-        for item in items:
-            train_ds.extend(item.train_ds)
-            eval_ds.extend(item.eval_ds)
-        return cls(train=train_ds, eval=eval_ds)
-
-    def to_hf_dict(self) -> Tuple["datasets.DatasetDict", Dict[str, List]]:  # type: ignore
-        try:
-            import datasets as dst
-        except ImportError:
-            raise ImportError("Install huggingface datasets library to use this method")
-
-        train_ds, train_meta = self.train_ds.to_hf_dataset()
-        eval_ds, eval_meta = self.eval_ds.to_hf_dataset()
-        return dst.DatasetDict(train=train_ds, eval=eval_ds), {
-            "train": train_meta,
-            "eval": eval_meta,
-        }
-
-    def to_disk(self, folder: str, fmt: Optional[str] = None):
-        """
-        Serialise all the items of the container to a folder on the disk
-        """
-        config = {}
-        config["type"] = "tune"
-        config["hf_type"] = fmt
-        os.makedirs(folder)
-        self.train_ds.to_disk(f"{folder}/train", fmt=fmt)
-        self.eval_ds.to_disk(f"{folder}/eval", fmt=fmt)
-        tu.to_json(config, fp=f"{folder}/tune_config.json", tight=True)
-
-    @classmethod
-    def from_disk(cls, folder: str):
-        """
-        Deserialise and rebuild the container from a folder on the disk
-        """
-        if not os.path.exists(folder):
-            raise ValueError(f"Folder '{folder}' does not exist")
-        if not os.path.exists(f"{folder}/train"):
-            raise ValueError(f"Folder '{folder}/train' does not exist")
-        if not os.path.exists(f"{folder}/eval"):
-            raise ValueError(f"Folder '{folder}/eval' does not exist")
-        if not os.path.exists(f"{folder}/tune_config.json"):
-            raise ValueError(f"File '{folder}/tune_config.json' does not exist")
-
-        # not sure what to do with these
-        config = tu.from_json(f"{folder}/tune_config.json")
-        return cls(
-            train=ThreadsList.from_disk(f"{folder}/train"),
-            eval=ThreadsList.from_disk(f"{folder}/eval"),
-        )
-
-
-########################################################################################################################
-#
 # Modalities
 # ==========
 #
@@ -1429,21 +1223,16 @@ class Dataset:
 # Embedding
 
 
-class EmbeddingGen(BaseModel):
-    embedding: List[List[float]] = Field(
-        ...,
-        description="The generated embedding as a list of floats.",
-    )
+class EmbeddingGen(BM):
+    embedding: list[list[float]] = F("The generated embedding as a list of floats.")
 
 
 ########################################################################################################################
 # Image
 
 
-class ImageGen(BaseModel):
-    image: ImageType = Field(
-        ..., description="The generated image in PIL.Image format."
-    )
+class ImageGen(BM):
+    image: ImageType = F("The generated image in PIL.Image format.")
 
     class Config:
         arbitrary_types_allowed = True
@@ -1453,15 +1242,15 @@ class ImageGen(BaseModel):
 # Audio
 
 
-class WebVTTCue(BaseModel):
-    start: str = Field(..., description="The start time of the cue.")
-    end: str = Field(..., description="The end time of the cue.")
-    text: str = Field(..., description="The text of the cue.")
+class WebVTTCue(BM):
+    start: str = F("The start time of the cue.")
+    end: str = F("The end time of the cue.")
+    text: str = F("The text of the cue.")
 
 
-class Transcript(BaseModel):
-    segments: list[WebVTTCue] = Field(
-        ..., description="A list of WebVTTCue objects representing the audio segments."
+class Transcript(BM):
+    segments: list[WebVTTCue] = F(
+        "A list of WebVTTCue objects representing the audio segments."
     )
 
     @property
@@ -1469,6 +1258,53 @@ class Transcript(BaseModel):
         return "\n".join(
             [f"{cue.start} --> {cue.end}\t{cue.text}" for cue in self.segments]
         )
+
+    @classmethod
+    def from_text(cls, text: str):
+        cues = []
+        lines = text.strip().split("\n")
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Skip WEBVTT header and blank lines
+            if line == "WEBVTT" or not line:
+                i += 1
+                continue
+
+            # Extract the timestamp
+            match = re.match(
+                r"(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})", line
+            )
+            if match:
+                start_time = match.group(1)
+                end_time = match.group(2)
+                i += 1
+
+                # Collect text for this cue
+                text_lines = []
+                while (
+                    i < len(lines)
+                    and lines[i].strip()
+                    and not re.match(
+                        r"(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})",
+                        lines[i].strip(),
+                    )
+                ):
+                    text_lines.append(lines[i].strip())
+                    i += 1
+                text = " ".join(text_lines)
+
+                cue = WebVTTCue(
+                    start=start_time,
+                    end=end_time,
+                    text=text,
+                )
+                cues.append(cue)
+            else:
+                i += 1
+        return cls(segments=cues)
 
     def to(self, format: str = "text"):
         if format == "vtt":
@@ -1484,54 +1320,3 @@ class Transcript(BaseModel):
             return "\n".join([f"{cue.text}" for cue in self.segments])
         else:
             raise ValueError(f"Unsupported format: {format}")
-
-
-def get_transcript(text: str):
-    """
-    Parses a WebVTT string and returns a list of WebVTTCue objects.
-    """
-    cues = []
-    lines = text.strip().split("\n")
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-
-        # Skip WEBVTT header and blank lines
-        if line == "WEBVTT" or not line:
-            i += 1
-            continue
-
-        # Extract the timestamp
-        match = re.match(
-            r"(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})", line
-        )
-        if match:
-            start_time = match.group(1)
-            end_time = match.group(2)
-            i += 1
-
-            # Collect text for this cue
-            text_lines = []
-            while (
-                i < len(lines)
-                and lines[i].strip()
-                and not re.match(
-                    r"(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})",
-                    lines[i].strip(),
-                )
-            ):
-                text_lines.append(lines[i].strip())
-                i += 1
-            text = " ".join(text_lines)
-
-            cue = WebVTTCue(
-                start=start_time,
-                end=end_time,
-                text=text,
-            )
-            cues.append(cue)
-        else:
-            i += 1
-
-    return Transcript(segments=cues)

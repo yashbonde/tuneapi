@@ -1,6 +1,6 @@
 [project]
 name = "tuneapi"
-version = "8.0.12"
+version = "8.0.15"
 description = "A swiss knife python package for building application with LLMs. Very opinionated."
 readme = "README.md"
 requires-python = ">=3.11"

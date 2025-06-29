@@ -24,7 +24,7 @@ class Gemini(tt.ModelInterface):
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
         extra_headers: Optional[Dict[str, str]] = None,
         api_token: Optional[str] = None,
-        emebdding_url: Optional[str] = None,
+        embedding_url: Optional[str] = None,
     ):
         super().__init__()
 
@@ -32,7 +32,7 @@ class Gemini(tt.ModelInterface):
         self.base_url = base_url
         self.api_token = api_token or tu.ENV.GEMINI_TOKEN("")
         self.extra_headers = extra_headers
-        self.embedding_url = emebdding_url or base_url
+        self.embedding_url = embedding_url or base_url
         self.client = None
 
     def set_api_token(self, token: str) -> None:
@@ -593,6 +593,85 @@ class Gemini(tt.ModelInterface):
             return resp
 
         return tt.EmbeddingGen(embedding=[resp["embedding"]["values"]])
+
+    # Image methods
+
+    def image_gen(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> tt.ImageGen:
+        """This is the blocking function to generate images"""
+        raise NotImplementedError("Gemini does not support image generation")
+
+    async def image_gen_async(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> tt.ImageGen:
+        """This is the async function to generate images"""
+        raise NotImplementedError("Gemini does not support image generation")
+
+    # Speech methods
+
+    def speech_to_text(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities: List[str],
+        **kwargs,
+    ) -> tt.Transcript:
+        """This is the blocking function to convert speech to text"""
+        raise NotImplementedError("Gemini does not support speech to text")
+
+    async def speech_to_text_async(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities: List[str] = ["segment"],
+        **kwargs,
+    ) -> tt.Transcript:
+        """This is the async function to convert speech to text"""
+        raise NotImplementedError("Gemini does not support speech to text")
+
+    # Batching methods
+
+    def submit_batch(
+        self,
+        threads: List[Union[tt.Thread, str]],
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        debug: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        timeout=(5, 30),
+        raw: bool = False,
+        **kwargs,
+    ) -> Tuple[str, List[str]] | Dict:
+        """This is the blocking function to submit a batch of threads. It will return the batch_id and custom_ids
+        for ordering the responses"""
+        raise NotImplementedError("Gemini does not support batch operations")
+
+    def get_batch(
+        self,
+        batch_id: str,
+        custom_ids: Optional[List[str]] = None,
+        token: Optional[str] = None,
+        raw: bool = False,
+    ) -> Tuple[Union[List[Any], Dict], Union[str, None]]:
+        """This is the blocking function to get the batch results"""
+        raise NotImplementedError("Gemini does not support batch operations")
 
 
 # helpers

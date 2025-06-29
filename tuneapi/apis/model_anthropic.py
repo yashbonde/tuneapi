@@ -132,8 +132,8 @@ class Anthropic(tt.ModelInterface):
         # if the last messag eis
         if thread.schema:
             assert (
-                claude_messages[-1]["role"] == thread.chats[-1].HUMAN
-            ), f"Last message should be from {thread.chats[-1].HUMAN} to generate structured output with Anthropic model."
+                claude_messages[-1]["role"] == "user"
+            ), f"Last message should be from user. Got: {claude_messages[-1]['role']}"
             resp_schema = thread.schema.model_json_schema()
             resp_schema["additionalProperties"] = False
             for _, defs in resp_schema.get("$defs", dict()).items():
@@ -262,48 +262,7 @@ class Anthropic(tt.ModelInterface):
             else:
                 yield usage_obj
 
-    # Interaction methods
-
-    def chat(
-        self,
-        chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
-        usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        **kwargs,
-    ):
-        output = ""
-        usage_obj = None
-        fn_call = None
-        for i in self.stream_chat(
-            chats=chats,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            token=token,
-            usage=usage,
-            extra_headers=extra_headers,
-            raw=False,
-            **kwargs,
-        ):
-            if isinstance(i, dict):
-                fn_call = i.copy()
-            elif isinstance(i, tt.Usage):
-                usage_obj = i
-            else:
-                output += i
-        if fn_call:
-            output = fn_call
-
-        if isinstance(chats, tt.Thread) and chats.schema:
-            output = chats.schema(**tu.from_json(output))
-
-        if usage:
-            return output, usage_obj
-        return output
+    # Chat methods (following ModelInterface order)
 
     def stream_chat(
         self,
@@ -352,7 +311,7 @@ class Anthropic(tt.ModelInterface):
             yield_usage=usage,
         )
 
-    async def chat_async(
+    def chat(
         self,
         chats: tt.Thread | str,
         model: Optional[str] = None,
@@ -366,7 +325,7 @@ class Anthropic(tt.ModelInterface):
         output = ""
         usage_obj = None
         fn_call = None
-        async for i in self.stream_chat_async(
+        for i in self.stream_chat(
             chats=chats,
             model=model,
             max_tokens=max_tokens,
@@ -442,6 +401,47 @@ class Anthropic(tt.ModelInterface):
             ):
                 yield x
 
+    async def chat_async(
+        self,
+        chats: tt.Thread | str,
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: Optional[float] = None,
+        token: Optional[str] = None,
+        usage: bool = False,
+        extra_headers: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ):
+        output = ""
+        usage_obj = None
+        fn_call = None
+        async for i in self.stream_chat_async(
+            chats=chats,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            token=token,
+            usage=usage,
+            extra_headers=extra_headers,
+            raw=False,
+            **kwargs,
+        ):
+            if isinstance(i, dict):
+                fn_call = i.copy()
+            elif isinstance(i, tt.Usage):
+                usage_obj = i
+            else:
+                output += i
+        if fn_call:
+            output = fn_call
+
+        if isinstance(chats, tt.Thread) and chats.schema:
+            output = chats.schema(**tu.from_json(output))
+
+        if usage:
+            return output, usage_obj
+        return output
+
     def distributed_chat(
         self,
         prompts: List[tt.Thread],
@@ -487,6 +487,84 @@ class Anthropic(tt.ModelInterface):
             time_metrics=time_metrics,
             **kwargs,
         )
+
+    # Embedding methods
+
+    def embedding(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str,
+        token: Optional[str],
+        timeout: Tuple[int, int],
+        raw: bool,
+        extra_headers: Optional[Dict[str, str]],
+    ) -> tt.EmbeddingGen:
+        """This is the blocking function to get embeddings for the chat"""
+        raise NotImplementedError("Anthropic does not support embeddings")
+
+    async def embedding_async(
+        self,
+        chats: tt.Thread | List[str] | str,
+        model: str,
+        token: Optional[str],
+        timeout: Tuple[int, int],
+        raw: bool,
+        extra_headers: Optional[Dict[str, str]],
+    ) -> tt.EmbeddingGen:
+        """This is the async function to get embeddings for the chat"""
+        raise NotImplementedError("Anthropic does not support embeddings")
+
+    # Image methods
+
+    def image_gen(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> tt.ImageGen:
+        """This is the blocking function to generate images"""
+        raise NotImplementedError("Anthropic does not support image generation")
+
+    async def image_gen_async(
+        self,
+        prompt: str,
+        style: str,
+        model: str,
+        n: int,
+        size: str,
+        **kwargs,
+    ) -> tt.ImageGen:
+        """This is the async function to generate images"""
+        raise NotImplementedError("Anthropic does not support image generation")
+
+    # Speech methods
+
+    def speech_to_text(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities: List[str],
+        **kwargs,
+    ) -> tt.Transcript:
+        """This is the blocking function to convert speech to text"""
+        raise NotImplementedError("Anthropic does not support speech to text")
+
+    async def speech_to_text_async(
+        self,
+        prompt: str,
+        audio: str,
+        model: str,
+        timestamp_granularities: List[str] = ["segment"],
+        **kwargs,
+    ) -> tt.Transcript:
+        """This is the async function to convert speech to text"""
+        raise NotImplementedError("Anthropic does not support speech to text")
+
+    # Batching methods
 
     def submit_batch(
         self,

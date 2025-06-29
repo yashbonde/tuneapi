@@ -7,6 +7,13 @@ minor versions.
 
 All relevant steps to be taken will be mentioned here.
 
+8.0.15
+------
+
+- Removed legacy endpoints directory
+- Updated API models and dependencies
+- Enhanced type system and documentation
+
 8.0.12
 ------
 

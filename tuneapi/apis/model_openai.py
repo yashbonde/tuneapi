@@ -828,7 +828,7 @@ class OpenAIProtocol(tt.ModelInterface):
             tu.logger.error(f"Could not transcribe audio: {r.text}")
             raise e
 
-        return tt.get_transcript(text=r.content.decode("utf-8"))
+        return tt.Transcript.from_text(text=r.content.decode("utf-8"))
 
     async def speech_to_text_async(
         self,
@@ -882,7 +882,7 @@ class OpenAIProtocol(tt.ModelInterface):
             tu.logger.error(f"Could not transcribe audio: {r.text}")
             raise e
 
-        return tt.get_transcript(text=r.content.decode("utf-8"))
+        return tt.Transcript.from_text(text=r.content.decode("utf-8"))
 
     def _prepare_audio_gen_input(
         self,
@@ -1338,7 +1338,7 @@ class Groq(OpenAIProtocol):
 
 class TuneModel(OpenAIProtocol):
     """
-    A class to interact with Groq's Large Language Models (LLMs) via their API.
+    A class to interact with Tune's Large Language Models (LLMs) via their API.
 
     Attributes:
         id (str): Identifier for the Mistral model.
@@ -1360,59 +1360,7 @@ class TuneModel(OpenAIProtocol):
         api_token: Optional[str] = None,
         **kwargs,
     ):
-        if extra_headers is None:
-            extra_headers = {}
-        if org_id is not None:
-            extra_headers["X-Org-Id"] = org_id
-
-        super().__init__(
-            id=id,
-            base_url=base_url,
-            extra_headers=extra_headers,
-            api_token=api_token or tu.ENV.TUNEAPI_TOKEN(),
-            emebdding_url="https://proxy.tune.app/v1/embeddings",
-            image_gen_url=None,
-            audio_transcribe_url=None,
-            audio_gen_url=None,
-            batch_url=None,
-            files_url=None,
-        )
-
-    def embedding(
-        self,
-        chats: tt.Thread | List[str] | str,
-        model: str = "openai/text-embedding-3-small",
-        token: Optional[str] = None,
-        timeout: Tuple[int, int] = (5, 60),
-        raw: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-    ):
-        return super().embedding(
-            chats=chats,
-            model=model,
-            token=token,
-            timeout=timeout,
-            raw=raw,
-            extra_headers=extra_headers,
-        )
-
-    async def embedding_async(
-        self,
-        chats: tt.Thread | List[str] | str,
-        model: str = "openai/text-embedding-3-small",
-        token: Optional[str] = None,
-        timeout: Tuple[int, int] = (5, 60),
-        raw: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-    ):
-        return await super().embedding_async(
-            chats=chats,
-            model=model,
-            token=token,
-            timeout=timeout,
-            raw=raw,
-            extra_headers=extra_headers,
-        )
+        raise NotImplementedError("Tune shutdown on 27th February, 2025")
 
 
 class Ollama(OpenAIProtocol):

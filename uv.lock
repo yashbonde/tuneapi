@@ -1348,7 +1348,7 @@ wheels = [
 
 [[package]]
 name = "tuneapi"
-version = "8.0.12"
+version = "8.0.15"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
