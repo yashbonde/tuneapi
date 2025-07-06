@@ -5,7 +5,17 @@ This package is already used in production at Tune AI, please do not wait for re
 to reach ``1.0.0``. We **do not follow the general rules** of semantic versioning, and there can be breaking changes between
 minor versions.
 
-All relevant steps to be taken will be mentioned here.
+All relevant steps to be mentioned here.
+
+8.0.17
+------
+
+- stronger compat with OpenAI protocol
+
+8.0.16
+------
+
+- Add ``ta.to_openai`` and ``ta.to_openai_chunk`` to convert input to OpenAI streaming response format.
 
 8.0.15
 ------
