@@ -19,7 +19,7 @@ upload_to_pypi:
 	@echo "Building package..."
 	uv sync
 	uv build
-	
+
 	@echo "Uploading package to PyPI... "
 	uv run -- twine upload dist/*
 

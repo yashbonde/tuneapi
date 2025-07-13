@@ -808,7 +808,7 @@ class Usage:
         self,
         input_tokens: int,
         output_tokens: int,
-        cached_tokens: int | None = 0,
+        cached_tokens: int = 0,
         **kwargs,
     ):
         self.input_tokens = input_tokens

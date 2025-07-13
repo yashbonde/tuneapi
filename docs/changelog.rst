@@ -7,6 +7,11 @@ minor versions.
 
 All relevant steps to be mentioned here.
 
+8.0.18
+------
+
+- Add ``F`` as an alias for ``Field`` in ``tuneapi.types.bm`` for more concise field definitions
+
 8.0.17
 ------
 
