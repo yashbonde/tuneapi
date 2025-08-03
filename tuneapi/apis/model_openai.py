@@ -12,7 +12,7 @@ import aiofiles
 from PIL import Image
 from io import BytesIO
 from copy import deepcopy
-from typing import Optional, Any, List, Dict, Tuple
+from typing import Any, Optional
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -24,14 +24,14 @@ class OpenAIProtocol(tt.ModelInterface):
         self,
         id: str,
         base_url: str,
-        extra_headers: Optional[Dict[str, str]],
-        api_token: Optional[str],
-        emebdding_url: Optional[str],
-        image_gen_url: Optional[str],
-        audio_transcribe_url: Optional[str],
-        audio_gen_url: Optional[str],
-        batch_url: Optional[str],
-        files_url: Optional[str],
+        extra_headers: dict[str, str] | None = None,
+        api_token: str | None = None,
+        emebdding_url: str | None = None,
+        image_gen_url: str | None = None,
+        audio_transcribe_url: str | None = None,
+        audio_gen_url: str | None = None,
+        batch_url: str | None = None,
+        files_url: str | None = None,
     ):
         super().__init__()
 
@@ -56,7 +56,7 @@ class OpenAIProtocol(tt.ModelInterface):
 
     def _process_header(
         self,
-        token: Optional[str] = None,
+        token: str | None = None,
         content_type: str = "application/json",
     ):
         return {
@@ -66,7 +66,7 @@ class OpenAIProtocol(tt.ModelInterface):
 
     # Chat methods
 
-    def _process_thread(self, thread: tt.Thread) -> List[Dict[str, Any]]:
+    def _process_thread(self, thread: tt.Thread) -> list[dict[str, Any]]:
         prev_tool_id = tu.get_random_string(5)
         final_messages = []
         for i, m in enumerate(thread.chats):
@@ -142,13 +142,13 @@ class OpenAIProtocol(tt.ModelInterface):
     def _process_input(
         self,
         chats,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = None,
-        temperature: Optional[float] = None,
+        temperature: float | None = None,
         parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         stream: bool = True,
         **kwargs,
@@ -255,13 +255,13 @@ class OpenAIProtocol(tt.ModelInterface):
     def stream_chat(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
+        temperature: float | None = None,
+        token: str | None = None,
         timeout=(5, 60),
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         raw: bool = False,
         parallel_tool_calls: bool = False,
@@ -303,12 +303,12 @@ class OpenAIProtocol(tt.ModelInterface):
     def chat(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
+        temperature: float | None = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         timeout=(5, 60),
         parallel_tool_calls: bool = False,
@@ -349,7 +349,7 @@ class OpenAIProtocol(tt.ModelInterface):
 
     def distributed_chat(
         self,
-        prompts: List[tt.Thread],
+        prompts: list[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
@@ -373,13 +373,13 @@ class OpenAIProtocol(tt.ModelInterface):
     async def stream_chat_async(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = None,
-        temperature: float = 1,
+        temperature: float | None = None,
         parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         raw: bool = False,
         timeout=(5, 60),
@@ -424,13 +424,13 @@ class OpenAIProtocol(tt.ModelInterface):
     async def chat_async(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = None,
-        temperature: float = 1,
+        temperature: float | None = None,
         parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         timeout=(5, 60),
         **kwargs,
     ) -> Any:
@@ -468,7 +468,7 @@ class OpenAIProtocol(tt.ModelInterface):
 
     async def distributed_chat_async(
         self,
-        prompts: List[tt.Thread],
+        prompts: list[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
@@ -493,10 +493,10 @@ class OpenAIProtocol(tt.ModelInterface):
 
     def _prepare_embedding_input(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str,
         token: str,
-        extra_headers: Optional[Dict[str, str]],
+        extra_headers: dict[str, str] | None,
     ):
         headers = self._process_header(token)
         extra_headers = extra_headers or self.extra_headers
@@ -525,12 +525,12 @@ class OpenAIProtocol(tt.ModelInterface):
 
     def embedding(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str = "text-embedding-3-small",
-        token: Optional[str] = None,
+        token: str | None = None,
         raw: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout: Tuple[int, int] = (5, 60),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
     ) -> tt.EmbeddingGen:
         """If you pass a list then returned items are in the insertion order"""
         if self.emebdding_url is None:
@@ -575,12 +575,12 @@ class OpenAIProtocol(tt.ModelInterface):
 
     async def embedding_async(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str = "text-embedding-3-small",
-        token: Optional[str] = None,
-        timeout: Tuple[int, int] = (10, 60),  # Increased connection timeout
+        token: str | None = None,
+        timeout: tuple[int, int] = (10, 60),  # Increased connection timeout
         raw: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> tt.EmbeddingGen:
         """If you pass a list then returned items are in the insertion order"""
         if self.emebdding_url is None:
@@ -669,8 +669,8 @@ class OpenAIProtocol(tt.ModelInterface):
         model: str = "dall-e-3",
         n: int = 1,
         size: str = "1024x1024",
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout: Tuple[int, int] = (5, 60),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> tt.ImageGen:
 
@@ -726,8 +726,8 @@ class OpenAIProtocol(tt.ModelInterface):
         model: str = "dall-e-3",
         n: int = 1,
         size: str = "1024x1024",
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout: Tuple[int, int] = (5, 60),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> tt.ImageGen:
         if self.image_gen_url is None:
@@ -782,8 +782,8 @@ class OpenAIProtocol(tt.ModelInterface):
         audio: str,
         model="whisper-1",
         timestamp_granularities=["segment"],
-        token: Optional[str] = None,
-        timeout: Tuple[int, int] = (5, 300),
+        token: str | None = None,
+        timeout: tuple[int, int] = (5, 300),
         **kwargs,
     ) -> tt.Transcript:
         if self.audio_transcribe_url is None:
@@ -836,8 +836,8 @@ class OpenAIProtocol(tt.ModelInterface):
         audio: str,
         model="whisper-1",
         timestamp_granularities=["segment"],
-        token: Optional[str] = None,
-        timeout: Tuple[int, int] = (5, 300),
+        token: str | None = None,
+        timeout: tuple[int, int] = (5, 300),
         **kwargs,
     ) -> tt.Transcript:
         if self.audio_transcribe_url is None:
@@ -912,8 +912,8 @@ class OpenAIProtocol(tt.ModelInterface):
         voice: str = "shimmer",
         model="tts-1",
         response_format="wav",
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout: Tuple[int, int] = (5, 60),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> bytes:
 
@@ -957,8 +957,8 @@ class OpenAIProtocol(tt.ModelInterface):
         voice: str = "shimmer",
         model="tts-1",
         response_format="wav",
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout: Tuple[int, int] = (5, 60),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> bytes:
 
@@ -1000,21 +1000,21 @@ class OpenAIProtocol(tt.ModelInterface):
 
     def submit_batch(
         self,
-        threads: List[tt.Thread | str],
-        model: Optional[str] = None,
+        threads: list[tt.Thread | str],
+        model: str | None = None,
         endpoint: str = "/v1/chat/completions",
-        max_tokens: int = None,
+        max_tokens: int | None = None,
         temperature: float = 1,
         parallel_tool_calls: bool = False,
-        token: Optional[str] = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         timeout=(5, 60),
         raw: bool = False,
         verbose: bool = False,
         **kwargs,
-    ) -> Tuple[str, List[str]] | Dict:
+    ) -> tuple[str, list[str]] | dict:
         if self.batch_url is None:
             raise ValueError("Batch URL is not set. Does this model support batches?")
 
@@ -1116,9 +1116,9 @@ class OpenAIProtocol(tt.ModelInterface):
     def get_batch(
         self,
         batch_id: str,
-        custom_ids: Optional[List[str]] = None,
+        custom_ids: list[str] | None = None,
         usage: bool = False,
-        token: Optional[str] = None,
+        token: str | None = None,
         raw: bool = False,
         verbose: bool = False,
     ):
@@ -1206,14 +1206,14 @@ class Openai(OpenAIProtocol):
         self,
         id: str = "gpt-4o",
         base_url: str = "https://api.openai.com/v1/chat/completions",
-        extra_headers: Optional[Dict[str, str]] = None,
-        api_token: Optional[str] = None,
-        emebdding_url: Optional[str] = None,
-        image_gen_url: Optional[str] = None,
-        audio_transcribe: Optional[str] = None,
-        audio_gen_url: Optional[str] = None,
-        batch_url: Optional[str] = None,
-        files_url: Optional[str] = None,
+        extra_headers: dict[str, str] | None = None,
+        api_token: str | None = None,
+        emebdding_url: str | None = None,
+        image_gen_url: str | None = None,
+        audio_transcribe: str | None = None,
+        audio_gen_url: str | None = None,
+        batch_url: str | None = None,
+        files_url: str | None = None,
     ):
         super().__init__(
             id=id,
@@ -1275,8 +1275,8 @@ class Mistral(OpenAIProtocol):
         self,
         id: str = "mistral-small-latest",
         base_url: str = "https://api.mistral.ai/v1/chat/completions",
-        extra_headers: Optional[Dict[str, str]] = None,
-        api_token: Optional[str] = None,
+        extra_headers: dict[str, str] | None = None,
+        api_token: str | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -1315,8 +1315,8 @@ class Groq(OpenAIProtocol):
         self,
         id: str = "llama3-70b-8192",
         base_url: str = "https://api.groq.com/openai/v1/chat/completions",
-        extra_headers: Optional[Dict[str, str]] = None,
-        api_token: Optional[str] = None,
+        extra_headers: dict[str, str] | None = None,
+        api_token: str | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -1355,9 +1355,9 @@ class TuneModel(OpenAIProtocol):
         self,
         id: str = "meta/llama-3.1-8b-instruct",
         base_url: str = "https://proxy.tune.app/chat/completions",
-        org_id: Optional[str] = None,
-        extra_headers: Optional[Dict[str, str]] = None,
-        api_token: Optional[str] = None,
+        org_id: str | None = None,
+        extra_headers: dict[str, str] | None = None,
+        api_token: str | None = None,
         **kwargs,
     ):
         raise NotImplementedError("Tune shutdown on 27th February, 2025")

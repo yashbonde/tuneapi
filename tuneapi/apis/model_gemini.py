@@ -9,7 +9,7 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 
 import httpx
 from pydantic import BaseModel
-from typing import get_args, get_origin, List, Optional, Dict, Any, Union, Tuple
+from typing import get_args, get_origin, Any, Optional, Union
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -20,11 +20,11 @@ class Gemini(tt.ModelInterface):
 
     def __init__(
         self,
-        id: Optional[str] = "gemini-2.0-flash-exp",
+        id: str | None = "gemini-2.0-flash-exp",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
-        extra_headers: Optional[Dict[str, str]] = None,
-        api_token: Optional[str] = None,
-        embedding_url: Optional[str] = None,
+        extra_headers: dict[str, str] | None = None,
+        api_token: str | None = None,
+        embedding_url: str | None = None,
     ):
         super().__init__()
 
@@ -46,12 +46,12 @@ class Gemini(tt.ModelInterface):
     def _process_input(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 1,
-        token: Optional[str] = None,
+        token: str | None = None,
         debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         **kwargs,
     ):
         if not token and not self.api_token:  # type: ignore
@@ -260,13 +260,13 @@ class Gemini(tt.ModelInterface):
     def stream_chat(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
-        timeout=(5, 60),
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
+        timeout: tuple[int, int] = (5, 60),
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         raw: bool = False,
         **kwargs,
@@ -306,14 +306,14 @@ class Gemini(tt.ModelInterface):
     def chat(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
-        timeout=(5, 60),
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> Any:
         output = ""
@@ -347,14 +347,14 @@ class Gemini(tt.ModelInterface):
     async def stream_chat_async(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: float = 1,
-        token: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         raw: bool = False,
         debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout=(5, 60),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ):
         url, headers, data = self._process_input(
@@ -394,13 +394,13 @@ class Gemini(tt.ModelInterface):
     async def chat_async(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = None,
-        temperature: float = 1,
-        token: Optional[str] = None,
-        extra_headers: Optional[Dict[str, str]] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
+        extra_headers: dict[str, str] | None = None,
         debug: bool = False,
-        timeout=(5, 60),
+        timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> Any:
         output = ""
@@ -435,7 +435,7 @@ class Gemini(tt.ModelInterface):
 
     def distributed_chat(
         self,
-        prompts: List[tt.Thread],
+        prompts: list[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
@@ -458,7 +458,7 @@ class Gemini(tt.ModelInterface):
 
     async def distributed_chat_async(
         self,
-        prompts: List[tt.Thread],
+        prompts: list[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
@@ -483,9 +483,9 @@ class Gemini(tt.ModelInterface):
 
     def _prepare_embedding_input(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str = "text-embedding-004:embedContent",
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
     ):
         headers = self._process_header()
         extra_headers = extra_headers or self.extra_headers
@@ -517,11 +517,11 @@ class Gemini(tt.ModelInterface):
 
     def embedding(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str = "text-embedding-004",
-        extra_headers: Optional[Dict[str, str]] = None,
-        token: Optional[str] = None,
-        timeout: Tuple[int, int] = (5, 60),
+        extra_headers: dict[str, str] | None = None,
+        token: str | None = None,
+        timeout: tuple[int, int] = (5, 60),
         raw: bool = False,
     ) -> tt.EmbeddingGen:
         url, headers, data = self._prepare_embedding_input(
@@ -556,11 +556,11 @@ class Gemini(tt.ModelInterface):
 
     async def embedding_async(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str = "text-embedding-004",
-        extra_headers: Optional[Dict[str, str]] = None,
-        token: Optional[str] = None,
-        timeout: Tuple[float, float] = (5.0, 60.0),  # httpx uses float for timeouts
+        extra_headers: dict[str, str] | None = None,
+        token: str | None = None,
+        timeout: tuple[float, float] = (5.0, 60.0),  # httpx uses float for timeouts
         raw: bool = False,
     ) -> tt.EmbeddingGen:
         url, headers, data = self._prepare_embedding_input(
@@ -627,7 +627,7 @@ class Gemini(tt.ModelInterface):
         prompt: str,
         audio: str,
         model: str,
-        timestamp_granularities: List[str],
+        timestamp_granularities: list[str],
         **kwargs,
     ) -> tt.Transcript:
         """This is the blocking function to convert speech to text"""
@@ -638,7 +638,7 @@ class Gemini(tt.ModelInterface):
         prompt: str,
         audio: str,
         model: str,
-        timestamp_granularities: List[str] = ["segment"],
+        timestamp_granularities: list[str] = ["segment"],
         **kwargs,
     ) -> tt.Transcript:
         """This is the async function to convert speech to text"""
@@ -648,17 +648,17 @@ class Gemini(tt.ModelInterface):
 
     def submit_batch(
         self,
-        threads: List[Union[tt.Thread, str]],
-        model: Optional[str] = None,
+        threads: list[tt.Thread | str],
+        model: str | None = None,
         max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        temperature: float | None = None,
+        token: str | None = None,
         debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout=(5, 30),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         raw: bool = False,
         **kwargs,
-    ) -> Tuple[str, List[str]] | Dict:
+    ) -> tuple[str, list[str]] | dict:
         """This is the blocking function to submit a batch of threads. It will return the batch_id and custom_ids
         for ordering the responses"""
         raise NotImplementedError("Gemini does not support batch operations")
@@ -666,10 +666,10 @@ class Gemini(tt.ModelInterface):
     def get_batch(
         self,
         batch_id: str,
-        custom_ids: Optional[List[str]] = None,
-        token: Optional[str] = None,
+        custom_ids: list[str] | None = None,
+        token: str | None = None,
         raw: bool = False,
-    ) -> Tuple[Union[List[Any], Dict], Union[str, None]]:
+    ) -> tuple[list[Any] | dict, str | None]:
         """This is the blocking function to get the batch results"""
         raise NotImplementedError("Gemini does not support batch operations")
 
@@ -677,7 +677,7 @@ class Gemini(tt.ModelInterface):
 # helpers
 
 
-def get_structured_schema(model: type[BaseModel]) -> Dict[str, Any]:
+def get_structured_schema(model: type[BaseModel]) -> dict[str, Any]:
     """
     Converts a Pydantic BaseModel to a JSON schema compatible with Gemini API,
     including `anyOf` for optional or union types and handling nested structures correctly.
@@ -690,7 +690,9 @@ def get_structured_schema(model: type[BaseModel]) -> Dict[str, Any]:
     """
 
     def _process_field(
-        field_name: str, field_type: Any, field_description: str = None
+        field_name: str,
+        field_type: Any,
+        field_description: str | None = None,
     ) -> dict:
         """Helper function to process a single field."""
         schema = {}

@@ -7,7 +7,7 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 # MIT License
 
 from copy import deepcopy
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Optional
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -17,10 +17,10 @@ from tuneapi.apis.turbo import distributed_chat, distributed_chat_async
 class Anthropic(tt.ModelInterface):
     def __init__(
         self,
-        id: Optional[str] = "claude-3-haiku-20240307",
+        id: str | None = "claude-3-haiku-20240307",
         base_url: str = "https://api.anthropic.com/v1/messages",
-        api_token: Optional[str] = None,
-        extra_headers: Optional[Dict[str, str]] = None,
+        api_token: str | None = None,
+        extra_headers: dict[str, str] | None = None,
     ):
         super().__init__()
 
@@ -34,7 +34,7 @@ class Anthropic(tt.ModelInterface):
     def set_api_token(self, token: str) -> None:
         self.api_token = token
 
-    def _process_header(self, token: str) -> Dict[str, str]:
+    def _process_header(self, token: str) -> dict[str, str]:
         if not token and not self.api_token:  # type: ignore
             raise Exception(
                 "Please set ANTHROPIC_TOKEN environment variable or pass through function"
@@ -47,7 +47,7 @@ class Anthropic(tt.ModelInterface):
             "anthropic-beta": "tools-2024-05-16",
         }
 
-    def _process_thread(self, thread: tt.Thread) -> Tuple[str, List[Dict[str, Any]]]:
+    def _process_thread(self, thread: tt.Thread) -> tuple[str, list[dict[str, Any]]]:
         # create the anthropic style data
         system = ""
         if thread.chats[0].role == tt.Message.SYSTEM:
@@ -155,12 +155,12 @@ class Anthropic(tt.ModelInterface):
     def _process_input(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
+        model: str | None = None,
         max_tokens: int = 1024,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        temperature: float | None = None,
+        token: str | None = None,
         debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         stream: bool = True,
         **kwargs,
     ):
@@ -267,14 +267,14 @@ class Anthropic(tt.ModelInterface):
     def stream_chat(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         debug: bool = False,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout=(5, 30),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         raw: bool = False,
         **kwargs,
     ) -> Any:
@@ -314,12 +314,12 @@ class Anthropic(tt.ModelInterface):
     def chat(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         **kwargs,
     ):
         output = ""
@@ -355,14 +355,14 @@ class Anthropic(tt.ModelInterface):
     async def stream_chat_async(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         debug: bool = False,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout=(5, 30),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         raw: bool = False,
         **kwargs,
     ) -> Any:
@@ -404,12 +404,12 @@ class Anthropic(tt.ModelInterface):
     async def chat_async(
         self,
         chats: tt.Thread | str,
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         usage: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
+        extra_headers: dict[str, str] | None = None,
         **kwargs,
     ):
         output = ""
@@ -444,7 +444,7 @@ class Anthropic(tt.ModelInterface):
 
     def distributed_chat(
         self,
-        prompts: List[tt.Thread],
+        prompts: list[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
@@ -467,7 +467,7 @@ class Anthropic(tt.ModelInterface):
 
     async def distributed_chat_async(
         self,
-        prompts: List[tt.Thread],
+        prompts: list[tt.Thread],
         post_logic: Optional[callable] = None,
         max_threads: int = 10,
         retry: int = 3,
@@ -492,24 +492,24 @@ class Anthropic(tt.ModelInterface):
 
     def embedding(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str,
-        token: Optional[str],
-        timeout: Tuple[int, int],
+        token: str | None,
+        timeout: tuple[int, int],
         raw: bool,
-        extra_headers: Optional[Dict[str, str]],
+        extra_headers: dict[str, str] | None,
     ) -> tt.EmbeddingGen:
         """This is the blocking function to get embeddings for the chat"""
         raise NotImplementedError("Anthropic does not support embeddings")
 
     async def embedding_async(
         self,
-        chats: tt.Thread | List[str] | str,
+        chats: tt.Thread | list[str] | str,
         model: str,
-        token: Optional[str],
-        timeout: Tuple[int, int],
+        token: str | None,
+        timeout: tuple[int, int],
         raw: bool,
-        extra_headers: Optional[Dict[str, str]],
+        extra_headers: dict[str, str] | None,
     ) -> tt.EmbeddingGen:
         """This is the async function to get embeddings for the chat"""
         raise NotImplementedError("Anthropic does not support embeddings")
@@ -547,7 +547,7 @@ class Anthropic(tt.ModelInterface):
         prompt: str,
         audio: str,
         model: str,
-        timestamp_granularities: List[str],
+        timestamp_granularities: list[str],
         **kwargs,
     ) -> tt.Transcript:
         """This is the blocking function to convert speech to text"""
@@ -558,7 +558,7 @@ class Anthropic(tt.ModelInterface):
         prompt: str,
         audio: str,
         model: str,
-        timestamp_granularities: List[str] = ["segment"],
+        timestamp_granularities: list[str] = ["segment"],
         **kwargs,
     ) -> tt.Transcript:
         """This is the async function to convert speech to text"""
@@ -568,17 +568,17 @@ class Anthropic(tt.ModelInterface):
 
     def submit_batch(
         self,
-        threads: List[tt.Thread | str],
-        model: Optional[str] = None,
-        max_tokens: int = 4096,
-        temperature: Optional[float] = None,
-        token: Optional[str] = None,
+        threads: list[tt.Thread | str],
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        token: str | None = None,
         debug: bool = False,
-        extra_headers: Optional[Dict[str, str]] = None,
-        timeout=(5, 30),
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
         raw: bool = False,
         **kwargs,
-    ) -> Tuple[str, List[str]] | Dict:
+    ) -> tuple[str, list[str]] | dict:
         bodies = []
         custom_ids = []
         for chats in threads:
@@ -624,12 +624,12 @@ class Anthropic(tt.ModelInterface):
     def get_batch(
         self,
         batch_id: str,
-        custom_ids: Optional[List[str]] = None,
+        custom_ids: list[str] | None = None,
         usage: bool = False,
-        token: Optional[str] = None,
+        token: str | None = None,
         raw: bool = False,
         verbose: bool = False,
-    ) -> Tuple[List[Any] | Dict, str | None]:
+    ) -> tuple[list[Any] | dict, str | None]:
         headers = self._process_header(token)
 
         if self.client is None:

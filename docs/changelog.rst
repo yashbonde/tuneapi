@@ -7,6 +7,17 @@ minor versions.
 
 All relevant steps to be mentioned here.
 
+8.0.20
+------
+
+- Add ``cachetools>=6.1.0`` as a dependency to support the new caching functionality
+
+8.0.19
+------
+
+- Add new ``acached`` decorator in ``tuneapi.utils.caching`` for async function caching with configurable argument filtering
+- Improve cache key generation by supporting ``ignore_args`` parameter to exclude specific arguments from cache keys
+
 8.0.18
 ------
 

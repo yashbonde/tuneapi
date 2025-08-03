@@ -5,6 +5,9 @@
 
 import os
 
+from tuneapi.utils.caching import (
+    acached,
+)
 from tuneapi.utils.code import (
     func_to_vars,
     Var,
