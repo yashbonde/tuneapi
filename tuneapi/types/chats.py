@@ -16,6 +16,7 @@ import os
 import re
 import copy
 import httpx
+import inspect
 import nutree as nt
 from functools import partial
 from abc import ABC, abstractmethod
@@ -42,22 +43,10 @@ class Prop(BM):
     name: str
     type: str = F("The kind of variable this is. 'number', 'text', 'enum', etc.")
     required: bool
-
-    def __init__(
-        self,
-        name: str,
-        type: str,
-        required: bool = False,
-        description: str | None = "",
-        items: dict | None = None,
-        enum: list[str] | None = None,
-    ):
-        self.name = name
-        self.description = description
-        self.required = required
-        self.type = type
-        self.items = items
-        self.enum = enum
+    description: str = ""
+    items: dict | None = None
+    enum: list[str] | None = None
+    _value: Any | None = None
 
     def __repr__(self) -> str:
         return f"<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
@@ -69,9 +58,14 @@ class Tool(BM):
     name: str
     description: str
     parameters: list[Prop]
+    call: Callable
+    default_values: dict[str, Any] = {}
+
+    def __call__(self, data: dict):
+        return self.call(data)
 
     def __repr__(self) -> str:
-        return f"<Tool: {self.name}>"
+        return f"<Tool: {self.name}({self.parameters})>"
 
     def to_dict(self):
         properties = {}
@@ -110,6 +104,71 @@ class Tool(BM):
             description=x["description"],
             parameters=parameters,
         )
+
+    def partial(self, **kwargs):
+        # the new parameters are those without the default values
+        self.default_values.update(kwargs)
+        new_parameters = []
+        for p in self.parameters:
+            if p.name not in self.default_values:
+                new_parameters.append(p)
+        self.parameters = new_parameters
+        return self
+
+
+def tool(func) -> Tool:
+
+    def wrapper(data: dict):
+        sig = inspect.signature(func)
+        _args = []
+        added = set()
+        for x, y in sig.parameters.items():
+            if x in _tool.default_values:
+                _args.append(_tool.default_values[x])
+            elif x in data:
+                _args.append(y.annotation(data[x]))
+            else:
+                if y.default == inspect._empty:
+                    raise ValueError(f"Parameter {x} is required")
+                _args.append(y.default)
+            added.add(x)  # update added props
+        args = sig.bind(*_args)
+        args.apply_defaults()
+        tu.logger.info(f"Calling {func.__name__}{args.args}")
+        out = func(*args.args)
+        return out
+
+    # define the tool
+    if not func.__doc__:
+        raise ValueError(
+            f"Function {func.__name__} must have a docstring, passed as description to the tool."
+        )
+    _tool = Tool(
+        name=func.__name__,
+        description=func.__doc__,
+        parameters=[
+            Prop(
+                name="is_end",
+                type="boolean",
+                required=True,
+            ),
+            *[
+                Prop(
+                    name=x,
+                    type={
+                        "int": "integer",
+                        "float": "number",
+                        "str": "string",
+                        "bool": "boolean",
+                    }.get(repr(y.annotation)[7:-1], "string"),
+                    required=y.default == inspect._empty,
+                )
+                for x, y in inspect.signature(func).parameters.items()
+            ],
+        ],
+        call=wrapper,
+    )
+    return _tool
 
 
 class Message:
@@ -638,7 +697,7 @@ class ModelInterface(ABC):
     def distributed_chat(
         self,
         prompts: list[Thread],
-        post_logic: Optional[callable] = None,
+        post_logic: Callable | None = None,
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,
@@ -652,7 +711,7 @@ class ModelInterface(ABC):
     async def distributed_chat_async(
         self,
         prompts: list[Thread],
-        post_logic: Optional[callable] = None,
+        post_logic: Callable | None = None,
         max_threads: int = 10,
         retry: int = 3,
         pbar=True,

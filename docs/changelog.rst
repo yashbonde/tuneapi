@@ -5,7 +5,22 @@ This package is already used in production at Tune AI, please do not wait for re
 to reach ``1.0.0``. We **do not follow the general rules** of semantic versioning, and there can be breaking changes between
 minor versions.
 
-All relevant steps to be mentioned here.
+All relevant steps to be mentioned here.\
+
+8.0.23
+------
+
+- Make tool calling much simpler with ``tuneapi.types.chats.tool`` decorator and ``partial`` method to fix some variable values.
+
+8.0.22
+------
+
+- Version bump and package maintenance
+
+8.0.21
+------
+
+- Modernize type annotations in ``ModelInterface`` by changing ``Optional[callable]`` to ``Callable | None`` for better Python 3.10+ compatibility
 
 8.0.20
 ------

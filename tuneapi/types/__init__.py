@@ -12,6 +12,7 @@ from tuneapi.types.chats import (
     ThreadsTree,
     Prop,
     Tool,
+    tool,
     EmbeddingGen,
     WebVTTCue,
     Transcript,
