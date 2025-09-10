@@ -644,6 +644,26 @@ class Gemini(tt.ModelInterface):
         """This is the async function to convert speech to text"""
         raise NotImplementedError("Gemini does not support speech to text")
 
+    def text_to_speech(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model: str = "tts-1",
+        response_format: str = "wav",
+    ) -> bytes:
+        """This is the blocking function to convert text to speech"""
+        raise NotImplementedError("Anthropic does not support text to speech")
+
+    async def text_to_speech_async(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model: str = "tts-1",
+        response_format: str = "wav",
+    ) -> bytes:
+        """This is the async function to convert text to speech"""
+        raise NotImplementedError("Anthropic does not support text to speech")
+
     # Batching methods
 
     def submit_batch(

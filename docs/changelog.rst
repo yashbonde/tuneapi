@@ -5,7 +5,19 @@ This package is already used in production at Tune AI, please do not wait for re
 to reach ``1.0.0``. We **do not follow the general rules** of semantic versioning, and there can be breaking changes between
 minor versions.
 
-All relevant steps to be mentioned here.\
+All relevant steps to be mentioned here.
+
+8.0.25
+------
+
+- revert changes to temperature default to ``None`` in all the APIs. OpenAI models that contains "gpt-5" in the model ID will not have
+  ``temperature`` in the data.
+
+8.0.24
+------
+
+- Make ``temperature`` default to ``1.0`` in all the APIs.
+
 
 8.0.23
 ------

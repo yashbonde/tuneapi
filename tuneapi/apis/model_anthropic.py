@@ -209,7 +209,7 @@ class Anthropic(tt.ModelInterface):
         for line in lines_fn():
             if isinstance(line, bytes):
                 line = line.decode().strip()
-            if not line or not "data:" in line:
+            if not line or "data:" not in line:
                 continue
 
             resp = tu.from_json(line.replace("data:", "").strip())
@@ -563,6 +563,26 @@ class Anthropic(tt.ModelInterface):
     ) -> tt.Transcript:
         """This is the async function to convert speech to text"""
         raise NotImplementedError("Anthropic does not support speech to text")
+
+    def text_to_speech(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model: str = "tts-1",
+        response_format: str = "wav",
+    ) -> bytes:
+        """This is the blocking function to convert text to speech"""
+        raise NotImplementedError("Anthropic does not support text to speech")
+
+    async def text_to_speech_async(
+        self,
+        prompt: str,
+        voice: str = "shimmer",
+        model: str = "tts-1",
+        response_format: str = "wav",
+    ) -> bytes:
+        """This is the async function to convert text to speech"""
+        raise NotImplementedError("Anthropic does not support text to speech")
 
     # Batching methods
 

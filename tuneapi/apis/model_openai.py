@@ -171,11 +171,12 @@ class OpenAIProtocol(tt.ModelInterface):
         if extra_headers:
             headers.update(extra_headers)
         data = {
-            "temperature": temperature,
             "messages": final_messages,
             "model": model or self.model_id,
             "stream": stream,
         }
+        if "gpt-5" not in self.model_id:
+            data["temperature"] = temperature
         if stream:
             data["stream_options"] = {"include_usage": usage}
         if max_tokens:
