@@ -49,7 +49,7 @@ class Prop(BM):
     _value: Any | None = None
 
     def __repr__(self) -> str:
-        return f"<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
+        return "<Tool.Prop: " + ("*" if self.required else "") + f"{self.name}>"
 
 
 class Tool(BM):
@@ -59,10 +59,11 @@ class Tool(BM):
     description: str
     parameters: list[Prop]
     call: Callable
+    system: str = ""
     default_values: dict[str, Any] = {}
 
-    def __call__(self, data: dict):
-        return self.call(data)
+    def __call__(self, data: dict = {}):
+        return self.call(data=data)
 
     def __repr__(self) -> str:
         return f"<Tool: {self.name}({self.parameters})>"
@@ -116,43 +117,40 @@ class Tool(BM):
         return self
 
 
-def tool(func) -> Tool:
+def tool(system: str = "") -> Tool:
+    """Decorate any python function to be a tool. Pass the ``system`` to add to the system prompt about the tool."""
 
-    def wrapper(data: dict):
-        sig = inspect.signature(func)
-        _args = []
-        added = set()
-        for x, y in sig.parameters.items():
-            if x in _tool.default_values:
-                _args.append(_tool.default_values[x])
-            elif x in data:
-                _args.append(y.annotation(data[x]))
-            else:
-                if y.default == inspect._empty:
-                    raise ValueError(f"Parameter {x} is required")
-                _args.append(y.default)
-            added.add(x)  # update added props
-        args = sig.bind(*_args)
-        args.apply_defaults()
-        tu.logger.info(f"Calling {func.__name__}{args.args}")
-        out = func(*args.args)
-        return out
+    def decorator(func):
+        def wrapper(data: dict = {}):
+            sig = inspect.signature(func)
+            _args = []
+            added = set()
+            for x, y in sig.parameters.items():
+                if x in _tool.default_values:
+                    _args.append(_tool.default_values[x])
+                elif x in data:
+                    _args.append(y.annotation(data[x]))
+                else:
+                    if y.default == inspect._empty:
+                        raise ValueError(f"Parameter {x} is required")
+                    _args.append(y.default)
+                added.add(x)  # update added props
+            args = sig.bind(*_args)
+            args.apply_defaults()
+            tu.logger.info(f"Calling {func.__name__}{args.args}")
+            out = func(*args.args)
+            return out
 
-    # define the tool
-    if not func.__doc__:
-        raise ValueError(
-            f"Function {func.__name__} must have a docstring, passed as description to the tool."
-        )
-    _tool = Tool(
-        name=func.__name__,
-        description=func.__doc__,
-        parameters=[
-            Prop(
-                name="is_end",
-                type="boolean",
-                required=True,
-            ),
-            *[
+        # define the tool
+        if not func.__doc__:
+            raise ValueError(
+                f"Function {func.__name__} must have a docstring, passed as description to the tool."
+            )
+
+        _tool = Tool(
+            name=func.__name__,
+            description=func.__doc__,
+            parameters=[
                 Prop(
                     name=x,
                     type={
@@ -165,10 +163,39 @@ def tool(func) -> Tool:
                 )
                 for x, y in inspect.signature(func).parameters.items()
             ],
-        ],
-        call=wrapper,
-    )
-    return _tool
+            call=wrapper,
+            system=system,
+        )
+        return _tool
+
+    return decorator
+
+
+ToolCall = Callable
+
+
+def to_tool_call(name: str, arguments: dict[str, Any], thread: "Thread") -> ToolCall:
+    tool_fn = list(filter(thread.tools, lambda x: x.name == name))
+    if not tool_fn:
+        raise ValueError(f"Tool {name} not found in thread")
+    tool_fn: Tool = tool_fn[0]
+    sig = inspect.signature(tool_fn.call)
+    _args = []
+    added = set()
+    for x, y in sig.parameters.items():
+        if x in tool_fn.default_values:
+            _args.append(tool_fn.default_values[x])
+        elif x in arguments:
+            _args.append(y.annotation(arguments[x]))
+        else:
+            if y.default == inspect._empty:
+                raise ValueError(f"Parameter {x} is required")
+            _args.append(y.default)
+        added.add(x)  # update added props
+    args = sig.bind(*_args)
+    args.apply_defaults()
+    tu.logger.info(f"Calling {tool_fn.name}{args.args}")
+    return partial(tool_fn.call, *args.args)
 
 
 class Message:
@@ -510,16 +537,6 @@ class Thread:
         return ft_dict, self.meta
 
     # modifications
-
-    def copy(self) -> "Thread":
-        return Thread(
-            *[x for x in self.chats],
-            evals=self.evals,
-            model=self.model,
-            title="Copy: " + self.title,
-            **self.meta,
-        )
-
     def append(self, message: Message):
         self.chats.append(message)
         return self
@@ -950,9 +967,9 @@ class ThreadsTree:
 
     def __getitem__(self, x) -> Message:
         try:
-            if type(x) == int:
+            if isinstance(x, int):
                 return self.messages[self.messages_map[x]]
-            elif type(x) == str:
+            elif isinstance(x, str):
                 return self.messages[x]
             elif isinstance(x, Message):
                 return self.messages[x.id]
@@ -1194,9 +1211,9 @@ class ThreadsTree:
             # if we are regenerating for a human, then we need to add a prompt to the tree and then regenerate
             if not prompt:
                 raise ValueError(
-                    f"Regenerating for role 'human' but no ``prompt`` provided. pass ``prompt``"
+                    "Regenerating for role 'human' but no ``prompt`` provided. pass ``prompt``"
                 )
-            if type(prompt) == str:
+            if isinstance(prompt, str):
                 prompt = human(prompt)
             self.add(prompt, to=self._get_parent_message(from_))
             thread = Thread()
@@ -1208,7 +1225,7 @@ class ThreadsTree:
             # to be a human
             if prompt:
                 raise ValueError(
-                    f"Regenerating for role 'gpt' but ``prompt`` provided. remove ``prompt``"
+                    "Regenerating for role 'gpt' but ``prompt`` provided. remove ``prompt``"
                 )
             thread = Thread()
             for x in self.tree.find(data_id=from_.id).get_parent_list():

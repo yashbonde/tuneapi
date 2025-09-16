@@ -1,0 +1,72 @@
+---
+description: Steps to follow for bumping version in tuneapi package
+---
+
+# TuneAPI Version Bump Process
+
+This rule outlines the required steps for bumping the version of the tuneapi package, as specified in the [Makefile](mdc:Makefile).
+
+## Required Files to Update
+
+When bumping the version, you MUST update these three files in the following order:
+
+### 1. Update pyproject.toml
+- Location: [pyproject.toml](mdc:pyproject.toml)
+- Line to modify: `version = "X.X.X"` (around line 3)
+- Change the version string to the new version number
+
+### 2. Update docs/conf.py  
+- Location: [docs/conf.py](mdc:docs/conf.py)
+- Line to modify: `release = "X.X.X"` (around line 16)
+- Change the release string to match the new version number
+
+### 3. Update changelog
+- Location: [docs/changelog.rst](mdc:docs/changelog.rst)
+- Add a new section at the top (after line 9) with:
+  ```
+  X.X.X
+  ------
+  
+  - [Description of changes made in this version]
+  
+  ```
+- Follow the existing format and style
+- Keep the previous version entries below
+
+## Upload Process
+
+After updating all three files, the package can be uploaded to PyPI using:
+
+```bash
+make upload_to_pypi
+```
+
+This command will:
+1. Sync dependencies with `uv sync`
+2. Build the package with `uv build`  
+3. Upload to PyPI with `twine upload dist/*`
+4. Clean up the `dist/` directory
+
+## Important Notes
+
+- **All three files must be updated** - the Makefile comment specifically mentions pyproject.toml and docs/conf.py must be updated before upload
+- **Changelog must be updated** - always document what changed in the new version
+- **Version numbers must match** - ensure the version is identical in both pyproject.toml and docs/conf.py
+- **Follow semantic versioning pattern** - use X.X.X format (e.g., 8.0.25)
+
+## Example Version Bump
+
+For bumping from 8.0.24 to 8.0.25:
+
+1. **pyproject.toml**: `version = "8.0.24"` → `version = "8.0.25"`
+2. **docs/conf.py**: `release = "8.0.24"` → `release = "8.0.25"`  
+3. **docs/changelog.rst**: Add new section:
+   ```
+   8.0.25
+   ------
+   
+   - [Describe the changes made]
+   
+   8.0.24
+   ------
+   ```

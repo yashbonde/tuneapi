@@ -71,6 +71,10 @@ class OpenAIProtocol(tt.ModelInterface):
         final_messages = []
         for i, m in enumerate(thread.chats):
             if m.role == tt.Message.SYSTEM:
+                if i != 0:
+                    raise ValueError(
+                        "Only the first message in thread can be the system message."
+                    )
                 final_messages.append({"role": "system", "content": m.value})
             elif m.role == tt.Message.HUMAN:
                 if isinstance(m.value, str):
@@ -137,6 +141,23 @@ class OpenAIProtocol(tt.ModelInterface):
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
             else:
                 raise Exception(f"Invalid message role: {m.role}")
+
+        if final_messages[0]["role"] == "system" and thread.tools:
+            tool_prompt = "# Tool Usage Instructions\n\n"
+            for tool in thread.tools:
+                tool_prompt += f"{tool.system}\n"
+            system = final_messages[0]["content"]
+            if isinstance(system, list):
+                system.append(
+                    {
+                        "type": "text",
+                        "text": tool_prompt,
+                    }
+                )
+            else:
+                system += tool_prompt
+            final_messages[0]["content"] = system
+
         return final_messages
 
     def _process_input(
@@ -175,18 +196,28 @@ class OpenAIProtocol(tt.ModelInterface):
             "model": model or self.model_id,
             "stream": stream,
         }
-        if "gpt-5" not in self.model_id:
+        if not (
+            self.model_id.startswith("gpt-5")
+            or self.model_id.startswith("o4-")
+            or self.model_id.startswith("o3-")
+            or self.model_id.startswith("o1-")
+        ):
             data["temperature"] = temperature
         if stream:
             data["stream_options"] = {"include_usage": usage}
         if max_tokens:
             data["max_tokens"] = max_tokens
-        if isinstance(chats, tt.Thread) and len(chats.tools):
+        if thread.tools:
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
             ]
-            data["parallel_tool_calls"] = parallel_tool_calls
-        if isinstance(chats, tt.Thread) and chats.schema:
+            if not (
+                self.model_id.startswith("o4-")
+                or self.model_id.startswith("o3-")
+                or self.model_id.startswith("o1-")
+            ):
+                data["parallel_tool_calls"] = parallel_tool_calls
+        if thread.schema:
             resp_schema = chats.schema.model_json_schema()
             resp_schema["additionalProperties"] = False
             for _, defs in resp_schema.get("$defs", dict()).items():
@@ -329,10 +360,14 @@ class OpenAIProtocol(tt.ModelInterface):
                 raw=False,
                 debug=debug,
                 timeout=timeout,
+                usage=usage,
                 **kwargs,
             ):
                 if isinstance(x, dict):
-                    output = x
+                    if "name" in x and "arguments" in x:
+                        output = tt.to_tool_call(x["name"], x["arguments"], chats)
+                    else:
+                        output = x
                 elif isinstance(x, tt.Usage):
                     usage_obj = x
                 else:
@@ -341,7 +376,7 @@ class OpenAIProtocol(tt.ModelInterface):
             tu.logger.error(f"API Error: {e.response.text}")
             raise e
 
-        if isinstance(chats, tt.Thread) and chats.schema:
+        if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
             output = chats.schema(**tu.from_json(output))
 
         if usage:
@@ -448,6 +483,7 @@ class OpenAIProtocol(tt.ModelInterface):
                 extra_headers=extra_headers,
                 raw=False,
                 timeout=timeout,
+                usage=usage,
                 **kwargs,
             ):
                 if isinstance(x, dict):
@@ -460,7 +496,7 @@ class OpenAIProtocol(tt.ModelInterface):
             tu.logger.error(f"API Error: {e.response.text}")
             raise e
 
-        if isinstance(chats, tt.Thread) and chats.schema:
+        if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
             output = chats.schema(**tu.from_json(output))
 
         if usage:

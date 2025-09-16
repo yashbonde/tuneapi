@@ -7,6 +7,14 @@ minor versions.
 
 All relevant steps to be mentioned here.
 
+8.0.26
+------
+
+- Enhanced tool system with system prompts integration and improved tool calling
+- Updated OpenAI protocol to handle new model prefixes (o1-, o3-, o4-, gpt-5) with appropriate parameter restrictions
+- Fixed tool calling for structured generation and improved error handling
+- Added validation for system messages positioning in threads
+
 8.0.25
 ------
 
