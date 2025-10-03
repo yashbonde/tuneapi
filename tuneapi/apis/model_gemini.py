@@ -3,13 +3,15 @@ Connect to the Google Gemini API to their LLMs. See more `Gemini <https://ai.goo
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
-# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# Copyright © 2025- Yash Bonde github.com/yashbonde
 # MIT License
 # https://ai.google.dev/gemini-api/docs/function-calling
 
 import httpx
 from pydantic import BaseModel
 from typing import get_args, get_origin, Any, Optional, Union
+
+from google import genai
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -20,7 +22,7 @@ class Gemini(tt.ModelInterface):
 
     def __init__(
         self,
-        id: str | None = "gemini-2.0-flash-exp",
+        id: str | None = "gemini-2.5-flash",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{id}:{rpc}",
         extra_headers: dict[str, str] | None = None,
         api_token: str | None = None,
@@ -34,6 +36,14 @@ class Gemini(tt.ModelInterface):
         self.extra_headers = extra_headers
         self.embedding_url = embedding_url or base_url
         self.client = None
+        self.async_client = None
+        self.google_client = None
+
+    def set_google_client(self, client: genai.Client | None = None):
+        if client is None:
+            client = genai.Client(api_key=self.api_token)
+            client.models.generate_images()
+        self.google_client = client
 
     def set_api_token(self, token: str) -> None:
         self.api_token = token
@@ -202,6 +212,10 @@ class Gemini(tt.ModelInterface):
                     t_copy.pop("parameters")
                 std_tools.append(t_copy)
             data["tools"] = [{"function_declarations": std_tools}]
+
+        # update with kwargs
+        if "generationConfig" in kwargs:
+            data["generationConfig"].update(kwargs.pop("generationConfig"))
         data.update(kwargs)
 
         if debug:
@@ -211,7 +225,7 @@ class Gemini(tt.ModelInterface):
 
         return url, headers, data
 
-    def _process_output(self, raw: bool, lines_fn: callable):
+    def _process_output(self, raw: bool, lines_fn: callable, yield_usage: bool = False):
         block_lines = ""
         done = False
         for line in lines_fn():
@@ -234,25 +248,42 @@ class Gemini(tt.ModelInterface):
 
             # print(f"{block_lines=}")
             if done:
-                part_data = tu.from_json(block_lines)["candidates"][0]["content"][
-                    "parts"
-                ][0]
-                if "text" in part_data:
-                    if raw:
-                        yield b"data: " + tu.to_json(
-                            {
-                                "object": "gemini_text",
-                                "choices": [{"delta": {"content": part_data["text"]}}],
-                            },
-                            tight=True,
-                        ).encode()
-                        yield b""
-                    else:
-                        yield part_data["text"]
-                elif "functionCall" in part_data:
-                    fn_call = part_data["functionCall"]
-                    fn_call["arguments"] = fn_call.pop("args")
-                    yield fn_call
+                response_data = tu.from_json(block_lines)
+
+                # Check for usage metadata first
+                if yield_usage and "usageMetadata" in response_data:
+                    usage_meta = response_data["usageMetadata"]
+                    yield tt.Usage(
+                        input_tokens=usage_meta.get("promptTokenCount", 0),
+                        output_tokens=usage_meta.get("candidatesTokenCount", 0),
+                        cached_tokens=usage_meta.get("cachedContentTokenCount", 0),
+                        model=self.model_id,
+                    )
+
+                # Process content
+                if (
+                    "candidates" in response_data
+                    and len(response_data["candidates"]) > 0
+                ):
+                    part_data = response_data["candidates"][0]["content"]["parts"][0]
+                    if "text" in part_data:
+                        if raw:
+                            yield b"data: " + tu.to_json(
+                                {
+                                    "object": "gemini_text",
+                                    "choices": [
+                                        {"delta": {"content": part_data["text"]}}
+                                    ],
+                                },
+                                tight=True,
+                            ).encode()
+                            yield b""
+                        else:
+                            yield part_data["text"]
+                    elif "functionCall" in part_data:
+                        fn_call = part_data["functionCall"]
+                        fn_call["arguments"] = fn_call.pop("args")
+                        yield fn_call
                 block_lines = ""
 
     # Interaction methods
@@ -301,6 +332,7 @@ class Gemini(tt.ModelInterface):
         yield from self._process_output(
             raw=raw,
             lines_fn=response.iter_lines,
+            yield_usage=usage,
         )
 
     def chat(
@@ -317,7 +349,7 @@ class Gemini(tt.ModelInterface):
         **kwargs,
     ) -> Any:
         output = ""
-        x = None
+        usage_obj = None
         try:
             for x in self.stream_chat(
                 chats=chats,
@@ -325,6 +357,7 @@ class Gemini(tt.ModelInterface):
                 max_tokens=max_tokens,
                 temperature=temperature,
                 token=token,
+                usage=usage,
                 timeout=timeout,
                 extra_headers=extra_headers,
                 debug=debug,
@@ -332,16 +365,32 @@ class Gemini(tt.ModelInterface):
                 **kwargs,
             ):
                 if isinstance(x, dict):
-                    output = x
+                    if "name" in x and "arguments" in x:
+                        tool_fn = list(
+                            filter(lambda tool: tool.name == x["name"], chats.tools)
+                        )
+                        if not tool_fn:
+                            raise ValueError(f"Tool {x['name']} not found in thread")
+                        output = tt.ToolCall(tool=tool_fn[0], arguments=x["arguments"])
+                    else:
+                        output = x
+                elif isinstance(x, tt.Usage):
+                    usage_obj = x
                 else:
                     output += x
         except httpx.HTTPError as e:
-            print(e.response.text)
+            tu.logger.error(e.response.text)
             raise e
 
-        if isinstance(chats, tt.Thread) and chats.schema:
-            output = chats.schema(**tu.from_json(output))
-            return output
+        if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
+            try:
+                output = chats.schema(**tu.from_json(output))
+            except Exception as e:
+                tu.logger.error(f"Error loading schema: {output}")
+                raise e
+
+        if usage:
+            return output, usage_obj
         return output
 
     async def stream_chat_async(
@@ -351,9 +400,10 @@ class Gemini(tt.ModelInterface):
         max_tokens: int | None = None,
         temperature: float | None = None,
         token: str | None = None,
-        raw: bool = False,
-        debug: bool = False,
+        usage: bool = False,
         extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        raw: bool = False,
         timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ):
@@ -388,6 +438,7 @@ class Gemini(tt.ModelInterface):
             for x in self._process_output(
                 raw=raw,
                 lines_fn=chunk.decode("utf-8").splitlines,
+                yield_usage=usage,
             ):
                 yield x
 
@@ -398,13 +449,14 @@ class Gemini(tt.ModelInterface):
         max_tokens: int | None = None,
         temperature: float | None = None,
         token: str | None = None,
+        usage: bool = False,
         extra_headers: dict[str, str] | None = None,
         debug: bool = False,
         timeout: tuple[int, int] = (5, 60),
         **kwargs,
     ) -> Any:
         output = ""
-        x = None
+        usage_obj = None
         try:
             async for x in self.stream_chat_async(
                 chats=chats,
@@ -412,6 +464,7 @@ class Gemini(tt.ModelInterface):
                 max_tokens=max_tokens,
                 temperature=temperature,
                 token=token,
+                usage=usage,
                 timeout=timeout,
                 extra_headers=extra_headers,
                 raw=False,
@@ -419,18 +472,32 @@ class Gemini(tt.ModelInterface):
                 **kwargs,
             ):
                 if isinstance(x, dict):
-                    output = x
+                    if "name" in x and "arguments" in x:
+                        tool_fn = list(
+                            filter(lambda tool: tool.name == x["name"], chats.tools)
+                        )
+                        if not tool_fn:
+                            raise ValueError(f"Tool {x['name']} not found in thread")
+                        output = tt.ToolCall(tool=tool_fn[0], arguments=x["arguments"])
+                    else:
+                        output = x
+                elif isinstance(x, tt.Usage):
+                    usage_obj = x
                 else:
                     output += x
-        except Exception as e:
-            if not x:
-                raise e
-            else:
-                raise ValueError(x)
+        except httpx.HTTPError as e:
+            tu.logger.error(e.response.text)
+            raise e
 
-        if isinstance(chats, tt.Thread) and chats.schema:
-            output = chats.schema(**tu.from_json(output))
-            return output
+        if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
+            try:
+                output = chats.schema(**tu.from_json(output))
+            except Exception as e:
+                tu.logger.error(f"Error loading schema: {output}")
+                raise e
+
+        if usage:
+            return output, usage_obj
         return output
 
     def distributed_chat(
@@ -648,8 +715,11 @@ class Gemini(tt.ModelInterface):
         self,
         prompt: str,
         voice: str = "shimmer",
-        model: str = "tts-1",
-        response_format: str = "wav",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
+        **kwargs,
     ) -> bytes:
         """This is the blocking function to convert text to speech"""
         raise NotImplementedError("Anthropic does not support text to speech")
@@ -658,8 +728,11 @@ class Gemini(tt.ModelInterface):
         self,
         prompt: str,
         voice: str = "shimmer",
-        model: str = "tts-1",
-        response_format: str = "wav",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
+        **kwargs,
     ) -> bytes:
         """This is the async function to convert text to speech"""
         raise NotImplementedError("Anthropic does not support text to speech")

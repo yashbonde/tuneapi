@@ -18,3 +18,7 @@ def Field(description: str, default: Any = NA, /, **kwargs) -> _Field:
 
 
 F = Field
+
+
+class Bool(BM):
+    value: bool

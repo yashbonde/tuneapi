@@ -1,7 +1,6 @@
 ---
-description: Steps to follow for bumping version in tuneapi package
+alwaysApply: false
 ---
-
 # TuneAPI Version Bump Process
 
 This rule outlines the required steps for bumping the version of the tuneapi package, as specified in the [Makefile](mdc:Makefile).

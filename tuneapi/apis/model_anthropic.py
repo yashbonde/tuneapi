@@ -3,7 +3,7 @@ Connect to the `Anthropic API <https://console.anthropic.com/>`_ to use Claude s
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
-# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# Copyright © 2025- Yash Bonde github.com/yashbonde
 # MIT License
 
 from copy import deepcopy
@@ -253,6 +253,7 @@ class Anthropic(tt.ModelInterface):
                     input_tokens=usage_dict.pop("input_tokens"),
                     output_tokens=usage_dict.pop("output_tokens"),
                     cached_tokens=cached_tokens,
+                    model=self.model_id,
                     **usage_dict,
                 )
         if yield_usage:
@@ -320,6 +321,8 @@ class Anthropic(tt.ModelInterface):
         token: str | None = None,
         usage: bool = False,
         extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ):
         output = ""
@@ -331,8 +334,10 @@ class Anthropic(tt.ModelInterface):
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
+            debug=debug,
             usage=usage,
             extra_headers=extra_headers,
+            timeout=timeout,
             raw=False,
             **kwargs,
         ):
@@ -345,8 +350,12 @@ class Anthropic(tt.ModelInterface):
         if fn_call:
             output = fn_call
 
-        if isinstance(chats, tt.Thread) and chats.schema:
-            output = chats.schema(**tu.from_json(output))
+        if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
+            try:
+                output = chats.schema(**tu.from_json(output))
+            except Exception as e:
+                tu.logger.error(f"Error loading schema: {output}")
+                raise e
 
         if usage:
             return output, usage_obj
@@ -410,6 +419,8 @@ class Anthropic(tt.ModelInterface):
         token: str | None = None,
         usage: bool = False,
         extra_headers: dict[str, str] | None = None,
+        debug: bool = False,
+        timeout=(5, 60),
         **kwargs,
     ):
         output = ""
@@ -421,8 +432,10 @@ class Anthropic(tt.ModelInterface):
             max_tokens=max_tokens,
             temperature=temperature,
             token=token,
+            debug=debug,
             usage=usage,
             extra_headers=extra_headers,
+            timeout=timeout,
             raw=False,
             **kwargs,
         ):
@@ -435,8 +448,12 @@ class Anthropic(tt.ModelInterface):
         if fn_call:
             output = fn_call
 
-        if isinstance(chats, tt.Thread) and chats.schema:
-            output = chats.schema(**tu.from_json(output))
+        if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
+            try:
+                output = chats.schema(**tu.from_json(output))
+            except Exception as e:
+                tu.logger.error(f"Error loading schema: {output}")
+                raise e
 
         if usage:
             return output, usage_obj
@@ -568,8 +585,11 @@ class Anthropic(tt.ModelInterface):
         self,
         prompt: str,
         voice: str = "shimmer",
-        model: str = "tts-1",
-        response_format: str = "wav",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
+        **kwargs,
     ) -> bytes:
         """This is the blocking function to convert text to speech"""
         raise NotImplementedError("Anthropic does not support text to speech")
@@ -578,8 +598,11 @@ class Anthropic(tt.ModelInterface):
         self,
         prompt: str,
         voice: str = "shimmer",
-        model: str = "tts-1",
-        response_format: str = "wav",
+        model="tts-1",
+        response_format="wav",
+        extra_headers: dict[str, str] | None = None,
+        timeout: tuple[int, int] = (5, 60),
+        **kwargs,
     ) -> bytes:
         """This is the async function to convert text to speech"""
         raise NotImplementedError("Anthropic does not support text to speech")

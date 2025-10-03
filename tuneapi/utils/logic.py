@@ -3,7 +3,7 @@ JSON Logic used from https://github.com/nadirizr/json-logic-py (MIT License)
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
-# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# Copyright © 2025- Yash Bonde github.com/yashbonde
 # MIT License
 # REMEMBER: nothing from outside tune should be imported in utils
 #

@@ -3,7 +3,7 @@ Connect to the `OpenAI API <https://playground.openai.com/>`_ and use their LLMs
 """
 
 # Copyright © 2024-2025 Frello Technology Private Limited
-# Copyright © 2025-2025 Yash Bonde github.com/yashbonde
+# Copyright © 2025- Yash Bonde github.com/yashbonde
 # MIT License
 
 import os
@@ -145,7 +145,8 @@ class OpenAIProtocol(tt.ModelInterface):
         if final_messages[0]["role"] == "system" and thread.tools:
             tool_prompt = "# Tool Usage Instructions\n\n"
             for tool in thread.tools:
-                tool_prompt += f"{tool.system}\n"
+                if tool.system:
+                    tool_prompt += f"{tool.system}\n"
             system = final_messages[0]["content"]
             if isinstance(system, list):
                 system.append(
@@ -277,6 +278,7 @@ class OpenAIProtocol(tt.ModelInterface):
                         input_tokens=usage.pop("prompt_tokens"),
                         output_tokens=usage.pop("completion_tokens"),
                         cached_tokens=usage["prompt_tokens_details"]["cached_tokens"],
+                        model=self.model_id,
                         **usage,
                     )
 
@@ -365,7 +367,12 @@ class OpenAIProtocol(tt.ModelInterface):
             ):
                 if isinstance(x, dict):
                     if "name" in x and "arguments" in x:
-                        output = tt.to_tool_call(x["name"], x["arguments"], chats)
+                        tool_fn = list(
+                            filter(lambda tool: tool.name == x["name"], chats.tools)
+                        )
+                        if not tool_fn:
+                            raise ValueError(f"Tool {x['name']} not found in thread")
+                        output = tt.ToolCall(tool=tool_fn[0], arguments=x["arguments"])
                     else:
                         output = x
                 elif isinstance(x, tt.Usage):
@@ -377,7 +384,11 @@ class OpenAIProtocol(tt.ModelInterface):
             raise e
 
         if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
-            output = chats.schema(**tu.from_json(output))
+            try:
+                output = chats.schema(**tu.from_json(output))
+            except Exception as e:
+                tu.logger.error(f"Error loading schema: {output}")
+                raise e
 
         if usage:
             return output, usage_obj
@@ -487,7 +498,15 @@ class OpenAIProtocol(tt.ModelInterface):
                 **kwargs,
             ):
                 if isinstance(x, dict):
-                    output = x
+                    if "name" in x and "arguments" in x:
+                        tool_fn = list(
+                            filter(lambda tool: tool.name == x["name"], chats.tools)
+                        )
+                        if not tool_fn:
+                            raise ValueError(f"Tool {x['name']} not found in thread")
+                        output = tt.ToolCall(tool=tool_fn[0], arguments=x["arguments"])
+                    else:
+                        output = x
                 elif isinstance(x, tt.Usage):
                     usage_obj = x
                 else:
@@ -497,7 +516,11 @@ class OpenAIProtocol(tt.ModelInterface):
             raise e
 
         if isinstance(chats, tt.Thread) and chats.schema and isinstance(output, str):
-            output = chats.schema(**tu.from_json(output))
+            try:
+                output = chats.schema(**tu.from_json(output))
+            except Exception as e:
+                tu.logger.error(f"Error loading schema: {output}")
+                raise e
 
         if usage:
             return output, usage_obj

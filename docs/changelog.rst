@@ -7,6 +7,49 @@ minor versions.
 
 All relevant steps to be mentioned here.
 
+8.0.33
+------
+
+- Upgrade ``Tool.partial`` to return a new ``Tool`` instead of updating self.
+
+8.0.32
+------
+
+- Add new ``Bool`` type in ``tuneapi.types.bm`` for boolean values, makes structured generation simpler.
+- Upgrade ``ToolCall`` to run:
+  - sync in async
+  - sync in sync
+  - async in async
+  - (Not supported) async in sync
+
+8.0.31
+------
+
+- Fix typo in tool call objects in the types and OpenAI protocol and Gemini protocol.
+
+8.0.30
+------
+
+- Fix tool call objects in the types and OpenAI protocol and Gemini protocol.
+
+8.0.29
+------
+
+- Fix import bugs
+- Clean dependencies
+
+8.0.28
+------
+
+- Bug fixes and improvements across API implementations
+- Updated type definitions and model interfaces
+- Enhanced compatibility and stability
+
+8.0.27
+------
+
+- Fix tool call objects in the types and OpenAI protocol.
+
 8.0.26
 ------
 

@@ -29,8 +29,7 @@ from tuneapi.types.bm import BM, F
 
 ########################################################################################################################
 #
-# The code in this section contains the primitive of this new chat API. The ``Tool`` class defines tools that the model
-# can predict. The ``Message`` class defines the container for storing the chat messages.
+# The ``Tool`` section contains data containers for all things tools.
 #
 ########################################################################################################################
 
@@ -53,17 +52,18 @@ class Prop(BM):
 
 
 class Tool(BM):
-    """A tool is a container for telling the LLM what it can do. This is a standard definition."""
+    """A tool is a container for telling the LLM what it can do. This is a standard definition.
+
+    You should always use the ``tool`` decorator to define a tool. Do not call this directly.
+    """
 
     name: str
     description: str
     parameters: list[Prop]
-    call: Callable
+    wrapper: Callable
     system: str = ""
     default_values: dict[str, Any] = {}
-
-    def __call__(self, data: dict = {}):
-        return self.call(data=data)
+    is_async: bool
 
     def __repr__(self) -> str:
         return f"<Tool: {self.name}({self.parameters})>"
@@ -106,28 +106,59 @@ class Tool(BM):
             parameters=parameters,
         )
 
-    def partial(self, **kwargs):
+    def copy(self) -> "Tool":
+        return Tool(
+            name=self.name,
+            description=self.description,
+            parameters=self.parameters,
+            wrapper=self.wrapper,
+            system=self.system,
+            is_async=self.is_async,
+        )
+
+    def partial(self, **kwargs) -> "Tool":
         # the new parameters are those without the default values
-        self.default_values.update(kwargs)
+        dv_copy = self.default_values.copy()
+        dv_copy.update(kwargs)
         new_parameters = []
         for p in self.parameters:
-            if p.name not in self.default_values:
+            if p.name not in dv_copy:
                 new_parameters.append(p)
-        self.parameters = new_parameters
-        return self
+        return Tool(
+            name=self.name,
+            description=self.description,
+            parameters=new_parameters,
+            wrapper=self.wrapper,
+            system=self.system,
+            is_async=self.is_async,
+            default_values=dv_copy,
+        )
 
 
 def tool(system: str = "") -> Tool:
     """Decorate any python function to be a tool. Pass the ``system`` to add to the system prompt about the tool."""
 
     def decorator(func):
-        def wrapper(data: dict = {}):
-            sig = inspect.signature(func)
+        sig = inspect.signature(func)
+
+        return_type = sig.return_annotation
+        if return_type != Message or return_type is None:
+            raise ValueError(
+                f"Function {func.__name__} must return a tt.function_resp() object"
+            )
+
+        # define the tool
+        if not func.__doc__:
+            raise ValueError(
+                f"Function {func.__name__} must have a docstring, passed as description to the tool."
+            )
+
+        def tool_call_wrapper(data: dict = {}, curr_tool: Tool = None):
             _args = []
             added = set()
             for x, y in sig.parameters.items():
-                if x in _tool.default_values:
-                    _args.append(_tool.default_values[x])
+                if x in curr_tool.default_values:
+                    _args.append(curr_tool.default_values[x])
                 elif x in data:
                     _args.append(y.annotation(data[x]))
                 else:
@@ -137,15 +168,7 @@ def tool(system: str = "") -> Tool:
                 added.add(x)  # update added props
             args = sig.bind(*_args)
             args.apply_defaults()
-            tu.logger.info(f"Calling {func.__name__}{args.args}")
-            out = func(*args.args)
-            return out
-
-        # define the tool
-        if not func.__doc__:
-            raise ValueError(
-                f"Function {func.__name__} must have a docstring, passed as description to the tool."
-            )
+            return func(*args.args)
 
         _tool = Tool(
             name=func.__name__,
@@ -163,39 +186,63 @@ def tool(system: str = "") -> Tool:
                 )
                 for x, y in inspect.signature(func).parameters.items()
             ],
-            call=wrapper,
+            wrapper=tool_call_wrapper,
             system=system,
+            is_async=inspect.iscoroutinefunction(func),
         )
         return _tool
 
     return decorator
 
 
-ToolCall = Callable
+class AsyncInSyncError(ValueError):
+    """Error raised when an async tool is called from a sync context."""
 
 
-def to_tool_call(name: str, arguments: dict[str, Any], thread: "Thread") -> ToolCall:
-    tool_fn = list(filter(thread.tools, lambda x: x.name == name))
-    if not tool_fn:
-        raise ValueError(f"Tool {name} not found in thread")
-    tool_fn: Tool = tool_fn[0]
-    sig = inspect.signature(tool_fn.call)
-    _args = []
-    added = set()
-    for x, y in sig.parameters.items():
-        if x in tool_fn.default_values:
-            _args.append(tool_fn.default_values[x])
-        elif x in arguments:
-            _args.append(y.annotation(arguments[x]))
+class ToolCall(BM):
+    tool: Tool
+    arguments: dict[str, Any]
+
+    def __repr__(self):
+        return f"<ToolCall: {self.tool.name}({self.tool.parameters}) | {self.wrapper}>"
+
+    async def run_async(self):
+        """Run the tool asynchronously. Works for both sync and async tools."""
+        if self.tool.is_async:
+            return await self.tool.wrapper(self.arguments, self.tool)
         else:
-            if y.default == inspect._empty:
-                raise ValueError(f"Parameter {x} is required")
-            _args.append(y.default)
-        added.add(x)  # update added props
-    args = sig.bind(*_args)
-    args.apply_defaults()
-    tu.logger.info(f"Calling {tool_fn.name}{args.args}")
-    return partial(tool_fn.call, *args.args)
+            # For CPU-bound sync functions, you might want to use run_in_executor:
+            import asyncio
+
+            return await asyncio.get_event_loop().run_in_executor(
+                None, self.tool.wrapper, self.arguments, self.tool
+            )
+            # For most cases, just run directly:
+            # return self.tool.wrapper(self.arguments)
+
+    def run(self):
+        """Smart runner that detects context and handles sync/async appropriately."""
+        import asyncio
+
+        if self.tool.is_async:
+            # Tool is async, we need async context
+            try:
+                asyncio.get_running_loop()
+                # We're in an async context, but this is a sync method
+                raise AsyncInSyncError()
+            except RuntimeError:
+                # No running loop, we can create one
+                return asyncio.run(self.tool.wrapper(self.arguments, self.tool))
+        else:
+            # Tool is sync, just run it
+            return self.tool.wrapper(self.arguments, self.tool)
+
+
+########################################################################################################################
+#
+# The ``Message`` class defines the container for storing the chat messages.
+#
+########################################################################################################################
 
 
 class Message:
@@ -230,10 +277,8 @@ class Message:
         "machine": GPT,
         # function calls
         "function_call": FUNCTION_CALL,
-        "function-call": FUNCTION_CALL,
         # function response
         "function_resp": FUNCTION_RESP,
-        "function-resp": FUNCTION_RESP,
         "tool": FUNCTION_RESP,
     }
     """A map that contains the popularly known mappings to make life simpler"""
@@ -241,7 +286,7 @@ class Message:
     # start initialization here
     def __init__(
         self,
-        value: str | list[dict[str, Any]],
+        value: str | list[dict[str, Any]] | ToolCall,
         role: str,
         images: list[str | ImageType] = [],
         id: str = None,
@@ -301,48 +346,28 @@ class Message:
             return self.metadata[__name]
         raise AttributeError(f"Attribute {__name} not found")
 
-    def to_dict(
-        self,
-        format: str | None = None,
-        meta: bool = False,
-    ):
-        """
-        Serialise the Message into a dictionary of different formats:
-            - format == ``ft`` then export to following format: ``{"from": "system/human/gpt", "value": "..."}``
-            - format == ``api`` then ``{"role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``. This is used with TuneAPI
-            - format == ``full`` then ``{"id": 1234421123, "role": "system/user/assistant", "content": [{"type": "text", "text": {"value": "..."}]}``
-            - default: ``{"role": "system/user/assistant", "content": "..."}``
-        """
+    def to_dict(self):
         role = self.role
-
-        ft = format == "ft"
-        api = format in ["api", "full"]
-        full = format == "full"
-
-        if not ft:
-            if self.role == self.HUMAN:
-                role = "user"
-            elif self.role == self.GPT:
-                role = "assistant"
+        if self.role == self.HUMAN:
+            role = "user"
+        elif self.role == self.GPT:
+            role = "assistant"
+        elif self.role == self.SYSTEM:
+            role = "system"
 
         chat_message: dict[str, str | float]
-        if ft:
-            chat_message = {"from": role}
-        else:
-            chat_message = {"role": role}
-
-        if ft:
-            chat_message["value"] = self.value
-        elif api:
-            chat_message["content"] = [{"type": "text", "text": self.value}]
+        chat_message = {"role": role}
+        if isinstance(self.value, ToolCall):
+            chat_message["content"] = {
+                "name": self.value.tool.name,
+                "arguments": self.value.arguments,
+            }
         else:
             chat_message["content"] = self.value
 
-        if meta:
-            chat_message["metadata"] = self.metadata
-
-        if full:
-            chat_message["id"] = self.id
+        chat_message["id"] = self.id
+        chat_message["metadata"] = self.metadata
+        chat_message["images"] = self.images
 
         return chat_message
 
@@ -350,8 +375,8 @@ class Message:
     def from_dict(cls, data):
         """Deserialise and construct a message from a dictionary"""
         return cls(
-            value=data.get("value") or data.get("content"),
-            role=data.get("from") or data.get("role"),
+            value=data.get("value"),
+            role=data.get("role"),
             id=data.get("id", ""),
             images=data.get("images", []),
             **data.get("metadata", {}),
@@ -452,12 +477,12 @@ class Thread:
         return self.chats[__x]
 
     def __radd__(self, other: "Thread"):
-        thread = self.copy()
+        thread = self.copy() if len(self) else Thread()
         thread.chats = other.chats + thread.chats
-        tools_added = []
+        tools_added = set()
         for tool in other.tools + thread.tools:
             if tool.name not in tools_added:
-                tools_added.append(tool)
+                tools_added.add(tool.name)
                 thread.tools.append(tool)
         thread.meta.update(other.meta)
         thread.keys = list(thread.meta.keys())
@@ -466,12 +491,12 @@ class Thread:
         return thread
 
     def __add__(self, other: "Thread"):
-        thread = self.copy()
+        thread = self.copy() if len(self) else Thread()
         thread.chats = other.chats + thread.chats
-        tools_added = []
+        tools_added = set()
         for tool in other.tools + thread.tools:
             if tool.name not in tools_added:
-                tools_added.append(tool)
+                tools_added.add(tool.name)
                 thread.tools.append(tool)
         thread.meta.update(other.meta)
         thread.keys = list(thread.meta.keys())
@@ -503,13 +528,13 @@ class Thread:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Thread":
-        chats = (
-            data.get("chats", [])
-            or data.get("conversations", [])
-            or data.get("messages", [])
-        )
-        if not chats:
+        if (
+            "chats" not in data
+            and "conversations" not in data
+            and "messages" not in data
+        ):
             raise ValueError("No chats found")
+        chats = data.get("chats", data.get("conversations", data.get("messages", [])))
         return cls(
             *[Message.from_dict(x) for x in chats],
             id=data.get("id", ""),
@@ -588,6 +613,77 @@ class Thread:
 # follow this interface to be compatible with the chat API.
 #
 ########################################################################################################################
+
+
+class Usage:
+    def __init__(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cached_tokens: int = 0,
+        model: str = "",
+        **kwargs,
+    ):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cached_tokens = cached_tokens
+        self.total_tokens = input_tokens + output_tokens
+        self.model = model
+        self.extra = kwargs
+
+    def __getitem__(self, x):
+        return getattr(self, x)
+
+    def __repr__(self) -> str:
+        return f"<Usage: {self.input_tokens} [Cached: {self.cached_tokens}] -> {self.output_tokens}>"
+
+    def __radd__(self, other: "Usage"):
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+            model=self.model + "+" + other.model,
+            trail=[self, other],
+        )
+
+    def __add__(self, other: "Usage"):
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cached_tokens=self.cached_tokens + other.cached_tokens,
+            model=self.model + "+" + other.model,
+            trail=[self, other],
+        )
+
+    def to_dict(self, extra: bool = False) -> dict[str, Any]:
+        data = {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cached_tokens": self.cached_tokens,
+            "total_tokens": self.total_tokens,
+        }
+        if extra:
+            data.update(self.extra)
+        return data
+
+    def to_json(self, *a, **k) -> str:
+        return tu.to_json(self.to_dict(), *a, **k)
+
+    def cost(
+        self,
+        input_token_per_million: float,
+        cache_token_per_million: float,
+        output_token_per_million: float,
+    ) -> float:
+        return (
+            self.input_tokens * input_token_per_million / 1e6
+            + self.cached_tokens * cache_token_per_million / 1e6
+            + self.output_tokens * output_token_per_million / 1e6
+        )
+
+
+class ChatResponse(BM):
+    parts: list[str | ToolCall]
 
 
 class ModelInterface(ABC):
@@ -670,7 +766,7 @@ class ModelInterface(ABC):
         debug: bool = False,
         timeout=(5, 60),
         **kwargs,
-    ) -> str | dict[str, Any]:
+    ) -> str:
         """This is the blocking function to block chat with the model"""
         pass
 
@@ -706,7 +802,7 @@ class ModelInterface(ABC):
         debug: bool = False,
         timeout=(5, 60),
         **kwargs,
-    ) -> str | dict[str, Any]:
+    ) -> str:
         """This is the async function to block chat with the model"""
         pass
 
@@ -877,56 +973,6 @@ class ModelInterface(ABC):
     ) -> tuple[list[Any] | dict, str | None]:
         """This is the blocking function to get the batch results"""
         pass
-
-
-class Usage:
-    def __init__(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        cached_tokens: int = 0,
-        **kwargs,
-    ):
-        self.input_tokens = input_tokens
-        self.output_tokens = output_tokens
-        self.cached_tokens = cached_tokens
-        self.total_tokens = input_tokens + output_tokens
-        self.extra = kwargs
-
-    def __getitem__(self, x):
-        return getattr(self, x)
-
-    def __repr__(self) -> str:
-        return f"<Usage: {self.input_tokens} [Cached: {self.cached_tokens}] -> {self.output_tokens}>"
-
-    def __radd__(self, other: "Usage"):
-        return Usage(
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            cached_tokens=self.cached_tokens + other.cached_tokens,
-        )
-
-    def __add__(self, other: "Usage"):
-        return Usage(
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            cached_tokens=self.cached_tokens + other.cached_tokens,
-        )
-
-    def to_json(self, *a, **k) -> str:
-        return tu.to_json(self.__dict__, *a, **k)
-
-    def cost(
-        self,
-        input_token_per_million: float,
-        cache_token_per_million: float,
-        output_token_per_million: float,
-    ) -> float:
-        return (
-            self.input_tokens * input_token_per_million / 1e6
-            + self.cached_tokens * cache_token_per_million / 1e6
-            + self.output_tokens * output_token_per_million / 1e6
-        )
 
 
 ########################################################################################################################

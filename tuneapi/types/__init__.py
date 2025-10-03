@@ -13,6 +13,8 @@ from tuneapi.types.chats import (
     Prop,
     Tool,
     tool,
+    AsyncInSyncError,
+    ToolCall,
     EmbeddingGen,
     WebVTTCue,
     Transcript,
@@ -28,4 +30,9 @@ from tuneapi.types.evals import (
     Evals,
 )
 
-from tuneapi.types.bm import BM, F, Field
+from tuneapi.types.bm import (
+    BM,
+    F,
+    Field,
+    Bool,
+)
