@@ -1,5 +1,5 @@
 # https://stackoverflow.com/a/2145605
-.PHONY: setup upload_to_pypi build_frontend serve
+.PHONY: setup upload_to_pypi upload_to_npm build_frontend serve
 
 # This takes care of setting up the project for the first time
 setup:
@@ -25,6 +25,14 @@ upload_to_pypi:
 
 	@echo "Cleaning up..."
 	rm -rf dist
+
+# This uploads the package to npm. This can only be run by me.
+upload_to_npm:
+	@echo "Bumping patch version and publishing to npm..."
+	cd ts && npm version patch
+	cd ts && npm publish
+	
+	@echo "Package published to npm!"
 
 docs:
 	@echo "Building documentation..."

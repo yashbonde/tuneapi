@@ -1,0 +1,38 @@
+{
+  "name": "tuneapi",
+  "version": "1.0.5",
+  "description": "A general purpose LLM application building toolkit. Ported from python-tuneapi.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yashbonde/tuneapi.git"
+  },
+  "author": "Yash Bonde",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yashbonde/tuneapi/issues"
+  },
+  "homepage": "https://github.com/yashbonde/tuneapi#readme",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^17.2.3",
+    "openai": "^6.3.0",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
+  }
+}
