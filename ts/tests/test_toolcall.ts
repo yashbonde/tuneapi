@@ -14,7 +14,7 @@
  *    - An array of ToolCall objects (tools that need to be executed)
  *
  * 2. If you receive ToolCall[], you must:
- *    - Execute each tool manually (using tool.wrapper())
+ *    - Execute each tool manually (using tool.toolFn())
  *    - Update the thread with functionResp() (tool_call is set in the response)
  *    - Call model.chat(thread) again to continue the conversation
  *
@@ -32,8 +32,7 @@
  * if (Array.isArray(response)) {
  *   // Tool calls detected - handle them manually
  *   for (const toolCall of response) {
- *     const result = await tool.wrapper(toolCall.arguments);
- *     result.tool_call = toolCall; // Set the tool_call
+ *     const result = await tool.toolFn(toolCall);
  *     thread.chats.push(functionResp(result));
  *   }
  *   // Continue conversation
@@ -51,6 +50,7 @@ import {
   system,
   functionResp,
   ToolResponse,
+  ToolCall,
 } from "../index";
 import {
   parseArgs,
@@ -86,19 +86,18 @@ const getWeatherTool = createTool(
       ["celsius", "fahrenheit"]
     ),
   ],
-  async (args: any): Promise<ToolResponse> => {
+  async (tool_call: ToolCall): Promise<ToolResponse> => {
     // Simulate API call
-    const location = args.location;
-    const units = args.units || "celsius";
+    const location = tool_call.arguments.location;
+    const units = tool_call.arguments.units || "celsius";
     const temp = units === "celsius" ? 22 : 72;
 
     console.log(
       `  [Tool Called] get_weather(location="${location}", units="${units}")`
     );
 
-    // Note: tool_call will be populated when this is called through the model
     return {
-      tool_call: {} as any, // This will be set by the caller
+      tool_call: tool_call,
       result: {
         location,
         temperature: temp,
@@ -130,8 +129,8 @@ const calculatorTool = createTool(
     createProp("a", "number", true, "First number"),
     createProp("b", "number", true, "Second number"),
   ],
-  async (args: any): Promise<ToolResponse> => {
-    const { operation, a, b } = args;
+  async (tool_call: ToolCall): Promise<ToolResponse> => {
+    const { operation, a, b } = tool_call.arguments;
 
     console.log(
       `  [Tool Called] calculate(operation="${operation}", a=${a}, b=${b})`
@@ -153,13 +152,13 @@ const calculatorTool = createTool(
         break;
       default:
         return {
-          tool_call: {} as any,
+          tool_call: tool_call,
           result: { error: "Unknown operation" },
         };
     }
 
     return {
-      tool_call: {} as any,
+      tool_call: tool_call,
       result: result,
     };
   },
@@ -174,8 +173,8 @@ const queryDatabaseTool = createTool(
   "query_database",
   "Query a database for user information",
   [createProp("user_id", "string", true, "The user ID to look up")],
-  async (args: any): Promise<ToolResponse> => {
-    const userId = args.user_id;
+  async (tool_call: ToolCall): Promise<ToolResponse> => {
+    const userId = tool_call.arguments.user_id;
 
     console.log(`  [Tool Called] query_database(user_id="${userId}")`);
 
@@ -197,7 +196,7 @@ const queryDatabaseTool = createTool(
 
     const userData = mockData[userId] || { error: "User not found" };
     return {
-      tool_call: {} as any,
+      tool_call: tool_call,
       result: userData,
     };
   },
@@ -231,10 +230,7 @@ async function handleToolCalls(
       }
 
       // Execute the tool (all tools are async)
-      const result = await tool.wrapper(toolCall.arguments);
-
-      // Set the tool_call in the ToolResponse
-      result.tool_call = toolCall;
+      const result = await tool.toolFn(toolCall);
 
       return result;
     });

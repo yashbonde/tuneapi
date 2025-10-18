@@ -1,6 +1,6 @@
 {
   "name": "tuneapi",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A general purpose LLM application building toolkit. Ported from python-tuneapi.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

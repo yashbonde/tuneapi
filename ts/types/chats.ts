@@ -27,7 +27,7 @@ export interface Tool {
   name: string;
   description: string;
   parameters: Prop[];
-  wrapper: (args: any) => Promise<ToolResponse>;
+  toolFn: (tool_call: ToolCall) => Promise<ToolResponse>;
   system: string;
   default_values: Record<string, any>;
 }
@@ -90,8 +90,6 @@ export interface Usage {
  */
 export interface ThinkingConfig {
   budget_tokens?: number;
-  // For OpenAI o1 series: { reasoning_effort: "low" | "medium" | "high" }
-  reasoning_effort?: "low" | "medium" | "high";
   include_thoughts?: boolean;
 }
 
@@ -220,7 +218,7 @@ export function createTool(
   name: string,
   description: string,
   parameters: Prop[],
-  wrapper: (args: any) => Promise<ToolResponse>,
+  toolFn: (tool_call: ToolCall) => Promise<ToolResponse>,
   system: string = "",
   default_values: Record<string, any> = {}
 ): Tool {
@@ -228,7 +226,7 @@ export function createTool(
     name,
     description,
     parameters,
-    wrapper,
+    toolFn,
     system,
     default_values,
   };

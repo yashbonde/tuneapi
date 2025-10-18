@@ -123,7 +123,7 @@ async function main() {
         modelType,
         modelId ||
           (modelType === "openai"
-            ? "o3-mini"
+            ? "gpt-5-mini-2025-08-07"
             : modelType === "gemini"
             ? "gemini-2.0-flash-thinking-exp"
             : undefined)

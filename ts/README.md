@@ -146,9 +146,14 @@ const weatherTool = createTool(
     createProp("location", "string", true, "The city name"),
     createProp("units", "string", false, "Temperature units", undefined, ["celsius", "fahrenheit"])
   ],
-  async (args) => {
+  async (tool_call) => {
     // Your tool implementation
-    return { temperature: 22, conditions: "sunny" };
+    const location = tool_call.arguments.location;
+    const units = tool_call.arguments.units || "celsius";
+    return {
+      tool_call: tool_call,
+      result: { temperature: 22, conditions: "sunny" }
+    };
   }
 );
 
@@ -256,9 +261,13 @@ const tool = createTool(
     createProp("location", "string", true, "The city name"),
     createProp("units", "string", false, "Temperature units", undefined, ["celsius", "fahrenheit"])
   ],
-  (args) => {
+  async (tool_call) => {
     // Tool implementation
-    return `Weather in ${args.location}`;
+    const location = tool_call.arguments.location;
+    return {
+      tool_call: tool_call,
+      result: `Weather in ${location}`
+    };
   }
 );
 ```
@@ -486,7 +495,7 @@ class MyCustomModel implements ModelInterface {
 
 - `createMessage(value, role, images?, id?, metadata?)` - Create a message
 - `createThread(...messages)` - Create a thread
-- `createTool(name, description, parameters, wrapper, system?, default_values?)` - Create a tool (wrapper must be async)
+- `createTool(name, description, parameters, toolFn, system?, default_values?)` - Create a tool (`toolFn` receives `ToolCall` and returns `Promise<ToolResponse>`)
 - `createProp(name, type?, required?, description?, items?, enumValues?, _value?)` - Create a property
 - `createUsage(input_tokens, output_tokens, cached_tokens?, model?, extra?)` - Create usage object
 

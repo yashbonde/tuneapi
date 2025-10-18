@@ -130,18 +130,28 @@ export class OpenAIModel implements ModelInterface {
           content: [{ type: "output_text", text: m.value }],
         });
       } else if (m.role === MESSAGE_ROLES.FUNCTION_RESP) {
-        // Function responses - represent as user message with function result
-        // Note: Responses API doesn't allow function_call in input, so we describe it in text
+        // Function responses - use raw_body for the function call and result
         const toolResp = m.value as ToolResponse;
 
+        // Add assistant message with the original function_call from raw_body
+        toolResp.tool_call.raw_body.type = "output_text";
+        finalMessages.push({
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: JSON.stringify(toolResp.tool_call.raw_body),
+            },
+          ],
+        });
+
+        // Add user message with function_result
         finalMessages.push({
           role: "user",
           content: [
             {
               type: "input_text",
-              text: `Function ${
-                toolResp.tool_call.name
-              } returned: ${JSON.stringify(toolResp.result)}`,
+              text: JSON.stringify(toolResp.result),
             },
           ],
         });
@@ -227,14 +237,10 @@ export class OpenAIModel implements ModelInterface {
     }
 
     // Add reasoning for smart models
-    if (
-      (options?.thinking?.include_thoughts ||
-        options?.thinking?.reasoning_effort) &&
-      isSmart
-    ) {
+    if (options?.thinking?.include_thoughts && isSmart) {
       requestBody.reasoning = {
-        effort: options.thinking.reasoning_effort || "medium",
-        summary: options.thinking.include_thoughts ? "detailed" : "auto",
+        effort: "medium",
+        summary: "auto",
       };
     }
 
