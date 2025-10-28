@@ -125,9 +125,13 @@ export class OpenAIModel implements ModelInterface {
             `GPT message value must be a string. Got: '${typeof m.value}'`
           );
         }
+        const trimmed = (m.value as string).trim();
+        if (!trimmed) {
+          continue;
+        }
         finalMessages.push({
           role: "assistant",
-          content: [{ type: "output_text", text: m.value }],
+          content: [{ type: "output_text", text: trimmed }],
         });
       } else if (m.role === MESSAGE_ROLES.FUNCTION_RESP) {
         // Function responses - use raw_body for the function call and result
@@ -161,10 +165,13 @@ export class OpenAIModel implements ModelInterface {
             `THINKING message value must be a string. Got: '${typeof m.value}'`
           );
         }
-
+        const trimmed = (m.value as string).trim();
+        if (!trimmed) {
+          continue;
+        }
         finalMessages.push({
           role: "assistant",
-          content: [{ type: "output_text", text: m.value }],
+          content: [{ type: "output_text", text: trimmed }],
         });
       } else {
         throw new Error(`Invalid message role: ${m.role}`);
@@ -398,10 +405,10 @@ export class OpenAIModel implements ModelInterface {
    * Chat with OpenAI (non-streaming) - returns tool calls without executing them
    * The caller is responsible for executing tools and updating the thread
    */
-  async chat(
+  async chat<T = string | ToolCall[]>(
     chats: Thread | string,
     options?: ChatOptions
-  ): Promise<string | ToolCall[]> {
+  ): Promise<T> {
     const thread =
       typeof chats === "string" ? createThread(human(chats)) : chats;
     const requestBody = this.createRequestBody(thread, options);
@@ -443,19 +450,19 @@ export class OpenAIModel implements ModelInterface {
 
         // Return tool calls if present
         if (toolCalls.length > 0) {
-          return toolCalls;
+          return toolCalls as T;
         }
 
         // Parse with schema if present
         if (thread.schema && textContent) {
           try {
-            return parseWithSchema(thread.schema, textContent);
+            return parseWithSchema(thread.schema, textContent) as T;
           } catch (error: any) {
             throw new Error(`Schema validation failed: ${error.message}`);
           }
         }
 
-        return textContent;
+        return textContent as T;
       }
 
       // Fallback to Chat Completions API format
@@ -480,7 +487,7 @@ export class OpenAIModel implements ModelInterface {
           }
         }
 
-        return toolCalls;
+        return toolCalls as T;
       }
 
       // No tool calls, return the content
@@ -489,13 +496,13 @@ export class OpenAIModel implements ModelInterface {
       // Parse with schema if present
       if (thread.schema && content) {
         try {
-          return parseWithSchema(thread.schema, content);
+          return parseWithSchema(thread.schema, content) as T;
         } catch (error: any) {
           throw new Error(`Schema validation failed: ${error.message}`);
         }
       }
 
-      return content;
+      return content as T;
     } catch (error: any) {
       throw new Error(`OpenAI API Error: ${error.message}`);
     }

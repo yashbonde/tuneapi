@@ -108,7 +108,12 @@ export class AnthropicModel implements ModelInterface {
           );
         }
 
-        const content: any[] = [{ type: "text", text: m.value }];
+        const trimmed = (m.value as string).trim();
+        if (!trimmed) {
+          continue;
+        }
+
+        const content: any[] = [{ type: "text", text: trimmed }];
 
         // Add images if present
         if (m.images.length > 0) {
@@ -154,12 +159,17 @@ export class AnthropicModel implements ModelInterface {
           );
         }
 
+        const trimmed = (m.value as string).trim();
+        if (!trimmed) {
+          continue;
+        }
+
         claudeMessages.push({
           role: "assistant",
           content: [
             {
               type: "thinking",
-              thinking: m.value,
+              thinking: trimmed,
             },
           ],
         });
@@ -221,19 +231,9 @@ export class AnthropicModel implements ModelInterface {
     options?: ChatOptions | StreamChatOptions,
     stream: boolean = false
   ): any {
-    // Adjust max_tokens if thinking is enabled
-    let maxTokens = options?.max_tokens || 8192;
-    if (options?.thinking?.include_thoughts) {
-      const budgetTokens = options.thinking.budget_tokens || 8192; // default to 8192 if not provided
-      if (budgetTokens > 0 && maxTokens <= budgetTokens) {
-        // Ensure max_tokens is greater than thinking budget
-        maxTokens = budgetTokens + 1024;
-      }
-    }
-
     const requestBody: any = {
       model: options?.model || this.model_id,
-      max_tokens: maxTokens,
+      max_tokens: options?.max_tokens || 8192,
       messages,
     };
 
@@ -245,24 +245,16 @@ export class AnthropicModel implements ModelInterface {
       requestBody.system = systemInstruction;
     }
 
-    if (options?.temperature !== undefined) {
-      requestBody.temperature = options.temperature;
-    }
-
     // Add extended thinking for Claude models that support it
-    if (options?.thinking?.include_thoughts) {
+    if (options?.thinking) {
       requestBody.thinking = {
         type: "enabled",
         budget_tokens: options.thinking.budget_tokens || 8192,
       };
       // Ensure max_tokens is at least as large as thinking budget
       requestBody.max_tokens =
-        Math.max(
-          options.max_tokens || 0,
-          requestBody.thinking.budget_tokens || 8192
-        ) + 128;
-    } else if (options?.thinking) {
-      requestBody.thinking = options.thinking;
+        Math.max(requestBody.max_tokens, requestBody.thinking.budget_tokens) +
+        1;
     }
 
     // Add tools if present
@@ -341,23 +333,68 @@ export class AnthropicModel implements ModelInterface {
 
       // If tool calls were made, yield them as JSON with raw_body
       if (hasToolCalls && toolUseBlocks.length > 0) {
-        const toolCalls = toolUseBlocks.map((toolUse) => ({
-          id: toolUse.id,
-          name: toolUse.name,
-          arguments: JSON.parse(toolUse.input),
-          raw_body: {
-            type: "tool_use",
-            id: toolUse.id,
-            name: toolUse.name,
-            input: JSON.parse(toolUse.input),
-          },
-        }));
+        const toolCalls: any[] = [];
 
-        // Yield tool calls as JSON with a special prefix
-        yield `__TOOL_CALLS__${JSON.stringify(toolCalls)}`;
+        for (const toolUse of toolUseBlocks) {
+          try {
+            // Try to parse the JSON input
+            const parsedInput = JSON.parse(toolUse.input);
+            toolCalls.push({
+              id: toolUse.id,
+              name: toolUse.name,
+              arguments: parsedInput,
+              raw_body: {
+                type: "tool_use",
+                id: toolUse.id,
+                name: toolUse.name,
+                input: parsedInput,
+              },
+            });
+          } catch (jsonError: any) {
+            // Handle malformed JSON gracefully
+            console.warn(
+              `Failed to parse tool call JSON for ${toolUse.name}: ${jsonError.message}. Input: ${toolUse.input}`
+            );
+
+            // Create a tool call with empty arguments and raw input
+            toolCalls.push({
+              id: toolUse.id,
+              name: toolUse.name,
+              arguments: {}, // Empty arguments for malformed JSON
+              raw_body: {
+                type: "tool_use",
+                id: toolUse.id,
+                name: toolUse.name,
+                input: toolUse.input, // Keep raw input string
+              },
+              _error: `JSON parse error: ${jsonError.message}`,
+            });
+          }
+        }
+
+        // Yield tool calls as JSON with a special prefix (only if we have any)
+        if (toolCalls.length > 0) {
+          yield `__TOOL_CALLS__${JSON.stringify(toolCalls)}`;
+        }
       }
     } catch (error: any) {
-      throw new Error(`Anthropic API Error: ${error.message}`);
+      // Provide more context for streaming errors
+      const errorMessage = error.message || "Unknown error";
+      const errorType = error.type || error.name || "Error";
+
+      console.error(`Anthropic streaming error [${errorType}]:`, errorMessage);
+
+      // Check for common issues
+      if (
+        errorMessage.includes("JSON") ||
+        errorMessage.includes("Unexpected end of JSON input")
+      ) {
+        throw new Error(
+          `Anthropic API Error: Failed to parse streaming response. This may be due to incomplete JSON in tool calls or streaming interruption. Original error: ${errorMessage}`
+        );
+      }
+
+      throw new Error(`Anthropic API Error: ${errorMessage}`);
     }
   }
 
@@ -365,10 +402,10 @@ export class AnthropicModel implements ModelInterface {
    * Chat with Anthropic (non-streaming) - returns tool calls without executing them
    * The caller is responsible for executing tools and updating the thread
    */
-  async chat(
+  async chat<T = string | ToolCall[]>(
     chats: Thread | string,
     options?: ChatOptions
-  ): Promise<string | ToolCall[]> {
+  ): Promise<T> {
     const thread =
       typeof chats === "string" ? createThread(human(chats)) : chats;
     const [systemInstruction, messages] = this.translateThread(thread);
@@ -397,7 +434,7 @@ export class AnthropicModel implements ModelInterface {
           raw_body: toolUse,
         }));
 
-        return toolCalls;
+        return toolCalls as T;
       }
 
       // No tool calls, extract the text content and thinking (if present)
@@ -424,13 +461,13 @@ export class AnthropicModel implements ModelInterface {
       // Parse with schema if present (use content without thinking for schema parsing)
       if (thread.schema && content) {
         try {
-          return parseWithSchema(thread.schema, content);
+          return parseWithSchema(thread.schema, content) as T;
         } catch (error: any) {
           throw new Error(`Schema validation failed: ${error.message}`);
         }
       }
 
-      return fullContent;
+      return fullContent as T;
     } catch (error: any) {
       throw new Error(`Anthropic API Error: ${error.message}`);
     }

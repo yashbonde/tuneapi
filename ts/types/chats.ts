@@ -140,10 +140,10 @@ export interface ModelInterface {
   ): AsyncGenerator<string, void, unknown>;
 
   /** This is the blocking function to chat with the model */
-  chat(
+  chat<T = string | ToolCall[]>(
     chats: Thread | string,
     options?: ChatOptions
-  ): Promise<string | ToolCall[]>;
+  ): Promise<T>;
 
   /** This is the blocking function to chat with the model in a distributed manner */
   distributedChat(

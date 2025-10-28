@@ -88,7 +88,11 @@ export class GeminiModel implements ModelInterface {
 
         messages.push({ role: "user", parts });
       } else if (m.role === MESSAGE_ROLES.GPT) {
-        const parts: any[] = [{ text: m.value as string }];
+        const trimmed = (m.value as string).trim();
+        if (!trimmed) {
+          continue;
+        }
+        const parts: any[] = [{ text: trimmed }];
 
         // Add images if present
         for (const img of m.images) {
@@ -138,9 +142,14 @@ export class GeminiModel implements ModelInterface {
           );
         }
 
+        const trimmed = (m.value as string).trim();
+        if (!trimmed) {
+          continue;
+        }
+
         messages.push({
           role: "model",
-          parts: [{ text: `[THINKING]\n${m.value}` }],
+          parts: [{ text: `[THINKING]\n${trimmed}` }],
         });
       } else {
         throw new Error(`Unknown role: ${m.role}`);
@@ -319,10 +328,10 @@ export class GeminiModel implements ModelInterface {
    * Chat with Gemini (non-streaming) - returns tool calls without executing them
    * The caller is responsible for executing tools and updating the thread
    */
-  async chat(
+  async chat<T = string | ToolCall[]>(
     chats: Thread | string,
     options?: ChatOptions
-  ): Promise<string | ToolCall[]> {
+  ): Promise<T> {
     const thread =
       typeof chats === "string" ? createThread(human(chats)) : chats;
     const [systemInstruction, messages] = this.translateThread(thread);
@@ -353,7 +362,7 @@ export class GeminiModel implements ModelInterface {
           },
         }));
 
-        return toolCalls;
+        return toolCalls as T;
       }
 
       // Extract thinking content if present
@@ -381,13 +390,13 @@ export class GeminiModel implements ModelInterface {
       // Parse with schema if present (use content without thinking)
       if (thread.schema && content) {
         try {
-          return parseWithSchema(thread.schema, content);
+          return parseWithSchema(thread.schema, content) as T;
         } catch (error: any) {
           throw new Error(`Schema validation failed: ${error.message}`);
         }
       }
 
-      return fullContent;
+      return fullContent as T;
     } catch (error: any) {
       throw new Error(`Gemini API Error: ${error.message}`);
     }

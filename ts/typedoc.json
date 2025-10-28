@@ -1,0 +1,28 @@
+{
+  "entryPoints": ["index.ts"],
+  "entryPointStrategy": "expand",
+  "out": "docs",
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "tests/**"
+  ],
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "theme": "default",
+  "readme": "README.md",
+  "includeVersion": true,
+  "sort": ["source-order"],
+  "categoryOrder": ["API", "Types", "Utils", "*"],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "name": "TuneAPI TypeScript",
+  "navigationLinks": {
+    "GitHub": "https://github.com/yashbonde/tuneapi",
+    "Python Docs": "../python/"
+  }
+}
+

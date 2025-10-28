@@ -1,0 +1,71 @@
+name: Deploy Documentation to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build Python documentation
+        run: |
+          uv venv
+          uv sync
+          cd docs && uv run sphinx-apidoc -o source/ ../tuneapi
+          uv run sphinx-build -b html docs/ docs/_build/html/
+
+      - name: Build TypeScript documentation
+        run: |
+          cd ts && npm install && npm run docs
+
+      - name: Combine documentation
+        run: |
+          mkdir -p _site
+          cp docs_landing/index.html _site/
+          mkdir -p _site/python
+          cp -r docs/_build/html/* _site/python/
+          mkdir -p _site/typescript
+          cp -r ts/docs/* _site/typescript/
+          touch _site/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
