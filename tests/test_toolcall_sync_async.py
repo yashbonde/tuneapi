@@ -11,33 +11,33 @@ import tuneapi.types as tt
 
 # Test tools for sync/async functionality
 @tt.tool()
-def sync_add(a: int, b: int) -> int:
+def sync_add(a: int, b: int) -> tt.Message:
     """Add two numbers synchronously."""
     return a + b
 
 
 @tt.tool()
-def sync_multiply(x: float, y: float) -> float:
+def sync_multiply(x: float, y: float) -> tt.Message:
     """Multiply two numbers synchronously."""
     return x * y
 
 
 @tt.tool()
-async def async_add(a: int, b: int) -> int:
+async def async_add(a: int, b: int) -> tt.Message:
     """Add two numbers asynchronously."""
     await asyncio.sleep(0.01)  # Simulate async work
     return a + b
 
 
 @tt.tool()
-async def async_multiply(x: float, y: float) -> float:
+async def async_multiply(x: float, y: float) -> tt.Message:
     """Multiply two numbers asynchronously."""
     await asyncio.sleep(0.01)  # Simulate async work
     return x * y
 
 
 @tt.tool()
-def sync_error_tool(should_error: bool) -> str:
+def sync_error_tool(should_error: bool) -> tt.Message:
     """Tool that can raise an error for testing."""
     if should_error:
         raise ValueError("Test error from sync tool")
@@ -45,7 +45,7 @@ def sync_error_tool(should_error: bool) -> str:
 
 
 @tt.tool()
-async def async_error_tool(should_error: bool) -> str:
+async def async_error_tool(should_error: bool) -> tt.Message:
     """Async tool that can raise an error for testing."""
     await asyncio.sleep(0.01)
     if should_error:

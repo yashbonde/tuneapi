@@ -15,10 +15,10 @@ import io
 import os
 import re
 import copy
-import httpx
 import inspect
 import nutree as nt
 from functools import partial
+from pathlib import Path
 from abc import ABC, abstractmethod
 from PIL.Image import Image as ImageType
 from typing import Any, Callable, Generator
@@ -245,6 +245,37 @@ class ToolCall(BM):
 ########################################################################################################################
 
 
+def _as_audio(item: str | Path | dict[str, str]) -> dict[str, str]:
+    """One audio attachment as ``{"data": <base64>, "format": <container>}``.
+
+    Accepts a path to read, or a dict that already holds the two. The format
+    is not guessed from the bytes: ``mp3`` and ``wav`` are told apart by their
+    extension here and by the caller everywhere else, and a wrong guess fails
+    at the provider with a message about the container rather than here with
+    one about the file.
+    """
+    if isinstance(item, dict):
+        if "data" not in item or "format" not in item:
+            raise ValueError(
+                "an audio dict needs both 'data' (base64) and 'format' (eg. 'mp3'), "
+                f"got keys: {sorted(item)}"
+            )
+        return {"data": item["data"], "format": item["format"]}
+
+    if isinstance(item, (str, Path)):
+        path = Path(item)
+        if not path.is_file():
+            raise ValueError(f"audio file not found: {path}")
+        fmt = path.suffix.lstrip(".").lower()
+        if not fmt:
+            raise ValueError(f"cannot tell the audio format of {path.name}")
+        return {"data": tu.to_b64(path.read_bytes()), "format": fmt}
+
+    raise ValueError(
+        f"audio must be a path or a {{'data', 'format'}} dict, got {type(item).__name__}"
+    )
+
+
 class Message:
     """
     A message is the unit element of information in a thread. You should avoid using directly and use the convinience
@@ -254,6 +285,14 @@ class Message:
         - value: this is generally a string or a list of dictionary objects for more advanced use cases
         - role: the role who produced this information
         - images: a list of PIL images or base64 strings
+        - audio: a list of audio files, each a path or a ``{"data", "format"}`` dict
+
+    Audio is carried the way images are -- inline in the message, base64 in the
+    request body -- because that is what the chat APIs accept and it needs no
+    upload step for a clip that exists for exactly one request. Unlike an
+    image, an audio part has to declare its container, so the format is kept
+    beside the bytes rather than inferred at the wire; a path gets it from the
+    extension, and a dict says it outright.
     """
 
     # names that are our standards roles
@@ -289,6 +328,7 @@ class Message:
         value: str | list[dict[str, Any]] | ToolCall,
         role: str,
         images: list[str | ImageType] = [],
+        audio: list[str | Path | dict[str, str]] = [],
         id: str = None,
         **kwargs,
     ):
@@ -307,6 +347,12 @@ class Message:
                 buf = io.BytesIO()
                 img.save(buf, "png")
                 self.images[i] = tu.to_b64(buf.getvalue())
+
+        # Normalised on the way in, like images, so that everything downstream
+        # -- the wire, ``to_dict``, a thread pickled and reloaded -- sees one
+        # shape and never has to reach back to the filesystem for a file that
+        # may not be there any more.
+        self.audio = [_as_audio(a) for a in audio]
 
         # validations
         if self.role == self.FUNCTION_CALL:
@@ -368,6 +414,7 @@ class Message:
         chat_message["id"] = self.id
         chat_message["metadata"] = self.metadata
         chat_message["images"] = self.images
+        chat_message["audio"] = self.audio
 
         return chat_message
 
@@ -379,6 +426,7 @@ class Message:
             role=data.get("role"),
             id=data.get("id", ""),
             images=data.get("images", []),
+            audio=data.get("audio", []),
             **data.get("metadata", {}),
         )  # type: ignore
 
@@ -682,8 +730,31 @@ class Usage:
         )
 
 
+class ReasoningBlock(BM):
+    """One complete reasoning/thinking block emitted by a model."""
+
+    text: str
+    index: int = 0
+    signature: str | None = None
+
+
 class ChatResponse(BM):
-    parts: list[str | ToolCall]
+    """The assembled result of draining a model stream."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    parts: list[str | ToolCall] = []
+    reasoning: list[ReasoningBlock] = []
+    usage: Usage | None = None
+    structured: Any = None
+
+    @property
+    def text(self) -> str:
+        return "".join([p for p in self.parts if isinstance(p, str)])
+
+    @property
+    def tool_calls(self) -> list[ToolCall]:
+        return [p for p in self.parts if isinstance(p, ToolCall)]
 
 
 class ModelInterface(ABC):
@@ -692,287 +763,35 @@ class ModelInterface(ABC):
     model_id: str
     """This is the model ID for the model"""
 
-    api_token: str
-    """This is the API token for the model"""
-
     extra_headers: dict[str, Any]
     """This is the placeholder for any extra headers to be passed during request"""
 
-    base_url: str
-    """This is the default URL that has to be pinged. This may not be the REST endpoint URL but anything"""
-
-    client: httpx.Client | None
-    """This is the client that is used to make the requests"""
-
-    async_client: httpx.AsyncClient | None
-    """This is the async client that is used to make the requests"""
-
     def __init__(self):
         self.model_id = ""
-        self.api_token = ""
         self.extra_headers = {}
-        self.base_url = ""
-        self.client = None
-        self.async_client = None
 
     def __repr__(self):
         return f"ta.{self.__class__.__name__}('{self.model_id}')"
 
-    def set_api_token(self, token: str) -> None:
-        """This are used to set the API token for the model"""
-        self.api_token = token
-
-    def set_async_client(self, client: httpx.AsyncClient | None = None):
-        if client is None:
-            client = httpx.AsyncClient()
-        self.async_client = client
-
-    def set_client(self, client: httpx.Client | None = None):
-        if client is None:
-            client = httpx.Client()
-        self.client = client
-
-    # Chat methods
-
     @abstractmethod
-    def stream_chat(
+    async def stream(
         self,
-        chats: Thread | str,
-        model: str | None = None,
-        max_tokens: int | None = None,
-        temperature: float | None = None,
-        token: str | None = None,
-        usage: bool = False,
-        extra_headers: dict[str, str] | None = None,
-        debug: bool = False,
-        raw: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ):
-        """This is the blocking function to stream chat with the model where each token is iteratively generated"""
-        pass
-
-    @abstractmethod
-    def chat(
-        self,
-        chats: Thread | str,
+        thread: "Thread",
+        *,
+        request: dict[str, Any] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
         temperature: float | None = None,
         parallel_tool_calls: bool = False,
-        token: str | None = None,
-        usage: bool = False,
-        extra_headers: dict[str, str] | None = None,
-        debug: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ) -> str:
-        """This is the blocking function to block chat with the model"""
-        pass
-
-    @abstractmethod
-    async def stream_chat_async(
-        self,
-        chats: Thread | str,
-        model: str | None = None,
-        max_tokens: int | None = None,
-        temperature: float | None = None,
-        token: str | None = None,
-        usage: bool = False,
-        extra_headers: dict[str, str] | None = None,
-        debug: bool = False,
-        raw: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ) -> str | dict[str, Any]:
-        """This is the async function to stream chat with the model where each token is iteratively generated"""
-        pass
-
-    @abstractmethod
-    async def chat_async(
-        self,
-        chats: Thread | str,
-        model: str | None = None,
-        max_tokens: int | None = None,
-        temperature: float | None = None,
-        parallel_tool_calls: bool = False,
-        token: str | None = None,
-        usage: bool = False,
-        extra_headers: dict[str, str] | None = None,
-        debug: bool = False,
-        timeout=(5, 60),
-        **kwargs,
-    ) -> str:
-        """This is the async function to block chat with the model"""
-        pass
-
-    @abstractmethod
-    def distributed_chat(
-        self,
-        prompts: list[Thread],
-        post_logic: Callable | None = None,
-        max_threads: int = 10,
-        retry: int = 3,
-        pbar=True,
-        debug=False,
         **kwargs,
     ):
-        """This is the blocking function to chat with the model in a distributed manner"""
-        pass
+        """Async generator yielding str deltas, ReasoningBlock, ToolCall and Usage objects."""
+        raise NotImplementedError
 
     @abstractmethod
-    async def distributed_chat_async(
-        self,
-        prompts: list[Thread],
-        post_logic: Callable | None = None,
-        max_threads: int = 10,
-        retry: int = 3,
-        pbar=True,
-        debug=False,
-        **kwargs,
-    ):
-        """This is the async function to chat with the model in a distributed manner"""
-        pass
-
-    # Embedding methods
-
-    @abstractmethod
-    def embedding(
-        self,
-        chats: Thread | list[str] | str,
-        model: str,
-        token: str | None,
-        timeout: tuple[int, int],
-        raw: bool,
-        extra_headers: dict[str, str] | None,
-    ) -> "EmbeddingGen":
-        """This is the blocking function to get embeddings for the chat"""
-        pass
-
-    @abstractmethod
-    async def embedding_async(
-        self,
-        chats: Thread | list[str] | str,
-        model: str,
-        token: str | None,
-        timeout: tuple[int, int],
-        raw: bool,
-        extra_headers: dict[str, str] | None,
-    ) -> "EmbeddingGen":
-        """This is the async function to get embeddings for the chat"""
-        pass
-
-    # Image methods
-
-    @abstractmethod
-    def image_gen(
-        self,
-        prompt: str,
-        style: str,
-        model: str,
-        n: int,
-        size: str,
-        **kwargs,
-    ) -> "ImageGen":
-        """This is the blocking function to generate images"""
-        pass
-
-    @abstractmethod
-    async def image_gen_async(
-        self,
-        prompt: str,
-        style: str,
-        model: str,
-        n: int,
-        size: str,
-        **kwargs,
-    ) -> "ImageGen":
-        """This is the async function to generate images"""
-        pass
-
-    # Speech methods
-    @abstractmethod
-    def text_to_speech(
-        self,
-        prompt: str,
-        voice: str = "shimmer",
-        model="tts-1",
-        response_format="wav",
-        extra_headers: dict[str, str] | None = None,
-        timeout: tuple[int, int] = (5, 60),
-        **kwargs,
-    ) -> bytes:
-        """This is the blocking function to convert text to speech"""
-        pass
-
-    @abstractmethod
-    async def text_to_speech_async(
-        self,
-        prompt: str,
-        voice: str = "shimmer",
-        model="tts-1",
-        response_format="wav",
-        extra_headers: dict[str, str] | None = None,
-        timeout: tuple[int, int] = (5, 60),
-        **kwargs,
-    ) -> bytes:
-        """This is the async function to convert text to speech"""
-        pass
-
-    @abstractmethod
-    def speech_to_text(
-        self,
-        prompt: str,
-        audio: str,
-        model: str,
-        timestamp_granularities: list[str],
-        **kwargs,
-    ) -> "Transcript":
-        """This is the blocking function to convert speech to text"""
-        pass
-
-    @abstractmethod
-    async def speech_to_text_async(
-        self,
-        prompt: str,
-        audio: str,
-        model: str,
-        timestamp_granularities=["segment"],
-        **kwargs,
-    ) -> "Transcript":
-        """This is the async function to convert speech to text"""
-        pass
-
-    # batching
-
-    @abstractmethod
-    def submit_batch(
-        self,
-        threads: list[Thread | str],
-        model: str | None = None,
-        max_tokens: int | None = None,
-        temperature: float | None = None,
-        token: str | None = None,
-        debug: bool = False,
-        extra_headers: dict[str, str] | None = None,
-        timeout: tuple[int, int] = (5, 60),
-        raw: bool = False,
-        **kwargs,
-    ) -> tuple[str, list[str]] | dict:
-        """This is the blocking function to submit a batch of threads. It will return the batch_id and custom_ids
-        for ordering the responses"""
-        pass
-
-    @abstractmethod
-    def get_batch(
-        self,
-        batch_id: str,
-        custom_ids: list[str] | None = None,
-        token: str | None = None,
-        raw: bool = False,
-    ) -> tuple[list[Any] | dict, str | None]:
-        """This is the blocking function to get the batch results"""
-        pass
+    async def run(self, thread: "Thread", **kwargs) -> "ChatResponse":
+        """Drain ``stream`` and return the assembled response."""
+        raise NotImplementedError
 
 
 ########################################################################################################################

@@ -1,6 +1,6 @@
 [project]
 name = "tuneapi"
-version = "8.0.33"
+version = "9.0.0"
 description = "A swiss knife python package for building application with LLMs. Very opinionated."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,26 +17,21 @@ classifiers = [
 ]
 keywords = ["llm", "api", "ai", "machine-learning", "language-models"]
 dependencies = [
-    "fire==0.7.0",
-    "requests>=2.31.0",
-    "cloudpickle==3.0.0",
-    "cryptography>=42.0.5",
-    "tqdm>=4.66.1",
-    "snowflake_id==1.0.2",
-    "nutree==0.8.0",
-    "pillow>=10.2.0",
-    "httpx>=0.28.1",
-    "pydantic>=2.6.4",
-    "aiofiles>=24.1.0",
-    "cachetools",
-    "google-genai>=1.38.0",
-    "openai>=1.109.1",
+    "cachetools>=7.1.7",
+    "cloudpickle>=3.1.2",
+    "cryptography>=50.0.0",
+    "nutree>=1.1.0",
+    "openai>=3.0.0",
+    "pillow>=12.3.0",
+    "pydantic>=2.13.4",
+    "requests>=2.34.2",
+    "snowflake-id>=1.0.2",
+    "tqdm>=4.70.0",
 ]
 
 [project.optional-dependencies]
-boto3 = ["boto3==1.29.6"]
-protobuf = ["protobuf>=5.27.3"]
-all = ["boto3==1.29.6", "protobuf>=5.27.3"]
+boto3 = ["boto3>=1.43.69"]
+all = ["boto3>=1.43.69"]
 
 [project.urls]
 Homepage = "https://github.com/yashbonde/tuneapi"
@@ -46,6 +41,14 @@ Documentation = "https://github.com/yashbonde/tuneapi#readme"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# Nothing published in the last three days is a resolution candidate. A release
+# that is broken, yanked or compromised is usually caught within a day or two,
+# and this package has no reason to be the one that finds out first. It is a
+# rolling window, so it needs no maintenance -- but it does mean a fix
+# published today will not be picked up until Thursday.
+exclude-newer = "3 days"
 
 [dependency-groups]
 dev = [

@@ -24,6 +24,8 @@ from tuneapi.types.chats import (
     assistant,
     function_call,
     function_resp,
+    ReasoningBlock,
+    ChatResponse,
 )
 
 from tuneapi.types.evals import (
@@ -35,4 +37,12 @@ from tuneapi.types.bm import (
     F,
     Field,
     Bool,
+)
+
+from tuneapi.types import events
+from tuneapi.types.events import (
+    Event,
+    EventKind,
+    EventType,
+    event_subscriber,
 )
